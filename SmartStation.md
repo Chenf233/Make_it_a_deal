@@ -41,6 +41,7 @@
  ┃ ┣ 📂 face_recognition/
  ┃ ┃ ┣ 📂 .prompt/              # 存放 core.md, constants.md 等
  ┃ ┃ ┣ 📜 __init__.py
+ ┃ ┃ ┣ 📜 benchmark.py
  ┃ ┃ ┣ 📜 core.py
  ┃ ┃ ┣ 📜 constants.py
  ┃ ┃ ┗ 📜 test_face.py
