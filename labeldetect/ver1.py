@@ -1,5 +1,7 @@
 #ver1 可实时推导
 
+#暂不使用，作保留处理
+
 from ultralytics import YOLO
 import cv2
 import sys
@@ -92,7 +94,7 @@ def stream_inference(
 # -------------------------- 自定义配置（修改这里！）--------------------------
 if __name__ == "__main__":
     # 配置参数（根据你的场景修改）
-    MODEL_PATH = 'best.pt'  # 你的模型路径
+    MODEL_PATH = 'labeldetect/best.pt'  # 你的模型路径
     # 流数据源（三选一）：
     # SOURCE = 0  # 本地摄像头（默认）
     # SOURCE = "test_video.mp4"  # 本地视频文件
@@ -104,7 +106,7 @@ if __name__ == "__main__":
         source=SOURCE,
         conf_threshold=0.80,
         save_video=True,  # 是否保存推理视频
-        save_path="ver1_output.mp4",
+        save_path="labeldetect/ver1_output.mp4",
         show_window=True
     )
 
