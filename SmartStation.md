@@ -60,9 +60,10 @@
  ┃ ┃ ┗ 📜 test_face.py
  ┃ ┃
  ┃ ┣ 📂 barcode_scanner/
- ┃ ┃ ┣ 📂 .prompt/              # 存放 dummy_core.md 等
+ ┃ ┃ ┣ 📂 .prompt/
  ┃ ┃ ┣ 📜 __init__.py
- ┃ ┃ ┣ 📜 dummy_core.py
+ ┃ ┃ ┣ 📜 generator.py
+ ┃ ┃ ┣ 📜 scanner.py
  ┃ ┃ ┣ 📜 constants.py
  ┃ ┃ ┗ 📜 test_barcode.py
  ┃ ┃
@@ -99,21 +100,36 @@
 ```
 # 样例markdown
 ```text
-# 模块：camera_manager
-**职责**：提供对物理摄像头和虚拟摄像头的统一抽象与管理，解决 OpenCV 阻塞主线程以及多端同时拉流时的帧同步问题。
-**设计模式**：后台守护线程(Daemon Thread)循环读取 + 线程锁(Lock)提取最新帧。
-**对外暴露的核心类**：
-- `BaseCamera`: 抽象基类
-- `RealCamera`: 真实摄像头
-- `DummyCamera`: 测试用的虚拟摄像头
+# 文件：real_camera.py
+**职责**：封装 `cv2.VideoCapture`，内部维护一个后台线程不断读取最新帧，避免缓冲区堆积导致画面延迟。
+**接口**：
+- `start()`: 开启后台读帧线程
+- `stop()`: 释放摄像头并回收线程
+- `get_frame() -> Tuple[bool, np.ndarray]`: 非阻塞获取最新的一帧
+**外部调用示例**：
+```python
+cam = RealCamera(camera_id=0)
+cam.start()
+success, frame = cam.get_frame()
+cam.stop()
+```
+
+```text
+# 模块：face_recognition (`__init__.py`)
+**职责**：向外部业务路由提供统一的高精度人脸识别能力。
+**接口**：
+暴露 `FaceRecognizer` 核心类与 `SIMILARITY_THRESHOLD` 默认阈值，供依赖注入（DI）或全局单例化使用。
+**外部调用示例**：
+```python
+from services.face_recognition import FaceRecognizer
+recognizer = FaceRecognizer()
 ```
 
 # 已经完成的模块
-目前services中的camera和face recognition已经完成测试。
+目前services中的camera, face recognition已经完成测试, 正在测试和移植同事写的barcode_scanner。
 
 # 交互指令
 如果你已经完全理解了项目背景、技术栈、架构约束和目录结构，请回复：
 “我已经完全掌握了 SmartStation 的架构设计与约束。请发送您希望开始实现的第一步（例如：1. 编写 database 模块，或 2. 编写 camera_manager 抽象层），我将为您输出生产级别的优质代码。”
 请不要在第一次回复中输出任何实现代码。
 如果你对这个项目的描述有任何疑问或者建议，也可以提出
-扫码那里是dummy实现是因为具体的识别实现我的同事正在实现，在外面的文件夹中，里面的内容与我们项目的组织不同，到时候我想方法改一改即可
