@@ -33,13 +33,14 @@ onnx==1.20.1
 onnxruntime-gpu==1.24.4
 opencv-python==4.13.0.92
 opencv-python-headless==4.13.0.92
-packaging @ file:///C:/miniconda3/conda-bld/packaging_1761049096285/work
+packaging==25.0
 pillow==12.1.1
+pip==26.0.1
 prettytable==3.17.0
 protobuf==7.34.1
 pydantic==2.12.5
-pydantic-settings==2.13.1
 pydantic_core==2.41.5
+pydantic-settings==2.13.1
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
@@ -50,6 +51,7 @@ requests==2.33.0
 scikit-image==0.26.0
 scikit-learn==1.8.0
 scipy==1.17.1
+setuptools==80.10.2
 simsimd==6.5.16
 six==1.17.0
 SQLAlchemy==2.0.48
@@ -59,10 +61,11 @@ sympy==1.14.0
 threadpoolctl==3.6.0
 tifffile==2026.3.3
 tqdm==4.67.3
-typing-inspection==0.4.2
 typing_extensions==4.15.0
+typing-inspection==0.4.2
 urllib3==2.6.3
 uvicorn==0.42.0
 watchfiles==1.1.1
 wcwidth==0.6.0
 websockets==16.0
+wheel==0.46.3

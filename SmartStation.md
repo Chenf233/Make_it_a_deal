@@ -42,61 +42,50 @@
 
 ```text
 📦 SmartStation
- ┣ 📂 database/
- ┃ ┣ 📂 .prompt/
- ┃ ┃ ┣ 📜 database.md           # database 模块总说明
- ┃ ┃ ┣ 📜 db_manager.md         # db_manager.py 的说明
- ┃ ┃ ┗ 📜 models.md             # models.py 的说明
- ┃ ┣ 📜 db_manager.py
- ┃ ┗ 📜 models.py
- ┃
- ┣ 📂 services/
- ┃ ┣ 📂 face_recognition/
- ┃ ┃ ┣ 📂 .prompt/              # 存放 core.md, constants.md 等
- ┃ ┃ ┣ 📜 __init__.py
- ┃ ┃ ┣ 📜 benchmark.py
- ┃ ┃ ┣ 📜 core.py
- ┃ ┃ ┣ 📜 constants.py
- ┃ ┃ ┗ 📜 test_face.py
- ┃ ┃
- ┃ ┣ 📂 barcode_scanner/
- ┃ ┃ ┣ 📂 .prompt/
- ┃ ┃ ┣ 📜 __init__.py
- ┃ ┃ ┣ 📜 generator.py
- ┃ ┃ ┣ 📜 scanner.py
- ┃ ┃ ┣ 📜 constants.py
- ┃ ┃ ┗ 📜 test_barcode.py
- ┃ ┃
- ┃ ┗ 📂 camera_manager/
- ┃   ┣ 📂 .prompt/              # 存放 camera_manager.md, base.md 等
- ┃   ┣ 📂 pics/                 #存放静态图片作为dummy camera的显示对象
- ┃   ┣ 📜 __init__.py
- ┃   ┣ 📜 base.py               
- ┃   ┣ 📜 real_camera.py
- ┃   ┣ 📜 dummy_camera.py
- ┃   ┣ 📜 constants.py
- ┃   ┗ 📜 test_camera.py
- ┃
- ┣ 📂 routers/                  
- ┃ ┣ 📂 .prompt/                # 存放 API 路由规范说明
- ┃ ┣ 📜 backend_api.py          
- ┃ ┣ 📜 station_api.py          
- ┃ ┗ 📜 client_api.py           
- ┃
- ┣ 📂 templates/
- ┃ ┣ 📜 backend.html
- ┃ ┣ 📜 station.html
- ┃ ┗ 📜 client.html
- ┃
- ┣ 📂 core/
- ┃ ┣ 📂 .prompt/
- ┃ ┃ ┗ 📜 config.md
- ┃ ┗ 📜 config.py
- ┃
- ┣ 📂 labeldetect/          #同事实现的模块，为方便git管理放在外面
- ┃
- ┣ 📜 main.py
- ┗ 📜 requirements.txt
+┣ 📂 core
+┃ ┣ 📂 .prompt
+┃ ┗ 📜 config.py
+┣ 📂 database
+┃ ┣ 📂 .prompt
+┃ ┣ 📜 db_manager.py
+┃ ┗ 📜 models.py
+┣ 📂 labeldetect
+┣ 📂 routers
+┃ ┣ 📂 .prompt       # 存放 API 路由规范说明
+┃ ┣ 📜 backend_api.py
+┃ ┣ 📜 client_api.py
+┃ ┗ 📜 station_api.py
+┣ 📂 services
+┃ ┣ 📂 camera_manager
+┃ ┃ ┣ 📂 .prompt     
+┃ ┃ ┣ 📂 pics        #存放静态图片作为dummy camera的显示对象
+┃ ┃ ┣ 📜 __init__.py
+┃ ┃ ┣ 📜 base.py
+┃ ┃ ┣ 📜 constants.py
+┃ ┃ ┣ 📜 dummy_camera.py
+┃ ┃ ┣ 📜 real_camera.py
+┃ ┃ ┗ 📜 test_camera.py
+┃ ┣ 📂 face_recognition
+┃ ┃ ┣ 📂 .prompt
+┃ ┃ ┣ 📂 pics
+┃ ┃ ┣ 📜 __init__.py
+┃ ┃ ┣ 📜 benchmark.py
+┃ ┃ ┣ 📜 constants.py
+┃ ┃ ┣ 📜 core.py
+┃ ┃ ┗ 📜 test_face.py
+┃ ┗ 📂 scanner
+┃   ┣ 📂 .prompt
+┃   ┣ 📜 __init__.py
+┃   ┣ 📜 constants.py
+┃   ┣ 📜 core.py
+┃   ┣ 📜 generator.py
+┃   ┗ 📜 test_scanner.py
+┣ 📂 templates
+┃ ┣ 📜 backend.html
+┃ ┣ 📜 client.html
+┃ ┗ 📜 station.html
+┣ 📜 SmartStation.md
+┗ 📜 main.py
 ```
 # 样例markdown
 ```text
