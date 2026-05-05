@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>SmartStation - 驿站作业端</title>
+</head>
+<body>
+    <h1>驿站作业端 (Station)</h1>
+    <button onclick="mockScanIn()">模拟触发入库 (/api/station/scan_in)</button>
+    <p>监控视频流占位区：</p>
+    <!-- <img src="/api/station/video_feed" width="640" height="480" style="border: 1px solid black;" /> -->
+
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws/station`);
+        ws.onopen = () => console.log("✅ 驿站端 WebSocket 已连接");
+        ws.onmessage = (event) => {
+            console.log("📥 收到驿站端消息:", event.data);
+        };
+
+        function mockScanIn() {
+            fetch("/api/station/scan_in", { method: "POST" })
+                .then(res => res.json())
+                .then(data => alert(JSON.stringify(data)))
+                .catch(err => console.error(err));
+        }
+    </script>
+</body>
+</html>

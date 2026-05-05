@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>SmartStation - 后台管理端</title>
+</head>
+<body>
+    <h1>后台管理端 (Backend)</h1>
+    <p>正在监听 WebSocket... 请打开控制台查看日志。</p>
+
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws/admin`);
+        ws.onopen = () => console.log("✅ 管理端 WebSocket 已连接");
+        ws.onmessage = (event) => {
+            console.log("📥 收到管理端消息:", event.data);
+            // 预留：处理异常上报通知
+        };
+    </script>
+</body>
+</html>

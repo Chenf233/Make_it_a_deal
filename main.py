@@ -20,7 +20,7 @@ from services.face_recognition import FaceRecognizer
 from services.scanner import QRScanner
 
 # 导入路由 (稍后我们将实现这些文件)
-# from routers import backend_api, station_api, client_api
+from routers import backend_api, station_api, client_api
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -89,15 +89,18 @@ templates = Jinja2Templates(directory="templates")
 # ==========================
 @app.get("/backend", response_class=HTMLResponse, summary="后台管理端页面")
 async def backend_page(request: Request):
-    return templates.TemplateResponse("backend.html", {"request": request})
+    # 修改这里：使用显式的关键字参数 request= 和 name=
+    return templates.TemplateResponse(request=request, name="backend.html")
 
 @app.get("/station", response_class=HTMLResponse, summary="驿站工作端页面")
 async def station_page(request: Request):
-    return templates.TemplateResponse("station.html", {"request": request})
+    # 修改这里
+    return templates.TemplateResponse(request=request, name="station.html")
 
 @app.get("/client", response_class=HTMLResponse, summary="客户体验端页面")
 async def client_page(request: Request):
-    return templates.TemplateResponse("client.html", {"request": request})
+    # 修改这里
+    return templates.TemplateResponse(request=request, name="client.html")
 
 
 # ==========================
@@ -122,6 +125,6 @@ async def websocket_endpoint(websocket: WebSocket, client_type: str):
 # ==========================
 # 挂载业务路由 (暂注释，待编写)
 # ==========================
-# app.include_router(backend_api.router, prefix="/api/backend", tags=["后台管理端"])
-# app.include_router(station_api.router, prefix="/api/station", tags=["驿站工作端"])
-# app.include_router(client_api.router, prefix="/api/client", tags=["客户体验端"])
+app.include_router(backend_api.router, prefix="/api", tags=["后台管理端"])
+app.include_router(station_api.router, prefix="/api", tags=["驿站工作端"])
+app.include_router(client_api.router, prefix="/api", tags=["客户体验端"])
