@@ -16,6 +16,26 @@ class UserRepository:
             conn.commit()
             return cursor.lastrowid
 
+    @classmethod
+    def get_user_by_id(cls, user_id: int) -> dict:
+        """
+        根据 user_id 获取用户信息（已剔除人脸特征 BLOB 数据以节省内存）
+        """
+        with DatabaseManager.get_connection() as conn:
+            # 如果您的 DatabaseManager 默认没开启字典映射，这里强制使用 sqlite3.Row
+            import sqlite3
+            conn.row_factory = sqlite3.Row 
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT user_id, phone, username, is_active, extra_info, created_at, updated_at
+                FROM users 
+                WHERE user_id = ?
+            ''', (user_id,))
+            
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
     @staticmethod
     def get_all_active_faces():
         """【业务端】启动时，加载所有 active=1 的人脸向量到内存"""

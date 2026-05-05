@@ -32,11 +32,12 @@ class ConnectionManager:
         """ 向指定业务端广播 JSON 消息 (例如让 client 端弹窗报警) """
         if client_type not in self.active_connections:
             return
-        
+
         dead_connections =[]
         for connection in self.active_connections[client_type]:
             try:
                 await connection.send_json(message)
+
             except Exception:
                 dead_connections.append(connection)
                 
@@ -79,7 +80,7 @@ class GlobalStateManager:
             # 假设数据库取出的 feature 是 bytes 类型的 blob，需要恢复成 numpy array
             # 这里依赖 database 模块存入时的序列化方式 (通常为 np.ndarray.tobytes())
             try:
-                emb = np.frombuffer(record["feature"], dtype=np.float32)
+                emb = np.frombuffer(record["face_feature"], dtype=np.float32)
                 embeddings.append(emb)
                 self.user_ids.append(record["user_id"])
             except Exception as e:
@@ -143,7 +144,7 @@ class GlobalStateManager:
             # if command:
             #     self._serial_port.write(command.encode('utf-8'))
             pass
-            
+
         # 无论是否真实串口，统一向 Client 端推送 WebSocket 消息以渲染 UI 弹窗
         await self.ws_manager.broadcast_to("client", {
             "type": "HARDWARE_ACTION",

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>SmartStation - 客户体验端</title>
+</head>
+<body>
+    <h1>客户体验端 (Client)</h1>
+    <button onclick="mockEntry()">模拟刷脸进门</button>
+    <button onclick="mockExit()">模拟刷脸出门</button>
+    
+    <div style="margin-top: 20px;">
+        <p>人脸预览流占位区：</p>
+        <!-- <img src="/api/client/video_feed" width="640" height="480" style="border: 1px solid black;" /> -->
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws/client`);
+        ws.onopen = () => console.log("✅ 客户端 WebSocket 已连接");
+        ws.onmessage = (event) => {
+            const payload = JSON.parse(event.data);
+            console.log("📥 收到硬件指令:", payload);
+
+            // 严格按照 F12 中的结构读取数据：
+            // 读取 action (例如 "DOOR_OPEN")
+            const actionType = payload.action; 
+            
+            // 读取 data 下面的 msg
+            // 使用 ?. 防止 data 为空时报错
+            const message = payload.data?.msg || "无消息内容";
+
+            alert(`【硬件触发】类型: ${actionType}\n消息: ${message}`);
+        };
+
+        function mockEntry() {
+            fetch("/api/client/access/entry", { method: "POST" })
+                .then(res => res.json())
+                .then(data => console.log("进门返回:", data));
+        }
+
+        function mockExit() {
+            fetch("/api/client/access/exit", { method: "POST" })
+                .then(res => res.json())
+                .then(data => console.log("出门返回:", data));
+        }
+    </script>
+</body>
+</html>

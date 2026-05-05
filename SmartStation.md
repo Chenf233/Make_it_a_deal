@@ -93,7 +93,7 @@
 ┃   ┣ 📜 core.py
 ┃   ┣ 📜 generator.py
 ┃   ┗ 📜 test_scanner.py
-┣ 📂 templates
+┣ 📂 templates #待定，可能会拆分html方便管理样式，目前只做简单的演示
 ┃ ┣ 📜 backend.html
 ┃ ┣ 📜 client.html
 ┃ ┗ 📜 station.html

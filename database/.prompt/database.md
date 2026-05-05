@@ -4,6 +4,7 @@
 - `db_manager.py`: 负责建库、建表及连接池上下文管理。
 - `models.py`: 核心数据仓库（Repository），包含 User, Parcel, AccessLog 三大业务实体的全生命周期 CRUD 接口。
 - `constants.py`: 数据库路径配置与离线 Mock 数据。
+- `schemas.py`: 通过 Pydantic 定义全系统的 HTTP API 请求体验证规则与标准响应序列化结构，确保端到端交互数据的类型安全。
 **外部调用示例**：
 ```python
 from database.db_manager import DatabaseManager
