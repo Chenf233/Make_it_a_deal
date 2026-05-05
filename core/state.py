@@ -32,12 +32,12 @@ class ConnectionManager:
         """ 向指定业务端广播 JSON 消息 (例如让 client 端弹窗报警) """
         if client_type not in self.active_connections:
             return
-        print(666)
+
         dead_connections =[]
         for connection in self.active_connections[client_type]:
             try:
                 await connection.send_json(message)
-                print(777)
+
             except Exception:
                 dead_connections.append(connection)
                 
@@ -144,7 +144,7 @@ class GlobalStateManager:
             # if command:
             #     self._serial_port.write(command.encode('utf-8'))
             pass
-            
+        print(555)
         # 无论是否真实串口，统一向 Client 端推送 WebSocket 消息以渲染 UI 弹窗
         await self.ws_manager.broadcast_to("client", {
             "type": "HARDWARE_ACTION",
