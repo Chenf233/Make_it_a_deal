@@ -144,7 +144,7 @@ class GlobalStateManager:
             # if command:
             #     self._serial_port.write(command.encode('utf-8'))
             pass
-        print(555)
+
         # 无论是否真实串口，统一向 Client 端推送 WebSocket 消息以渲染 UI 弹窗
         await self.ws_manager.broadcast_to("client", {
             "type": "HARDWARE_ACTION",

@@ -18,10 +18,18 @@
         const ws = new WebSocket(`ws://${window.location.host}/ws/client`);
         ws.onopen = () => console.log("✅ 客户端 WebSocket 已连接");
         ws.onmessage = (event) => {
-            // 核心：监听并弹窗模拟硬件（蜂鸣器/开门/报警）
             const payload = JSON.parse(event.data);
             console.log("📥 收到硬件指令:", payload);
-            alert(`【硬件触发】类型: ${payload.action_type}\n消息: ${payload.payload.msg}`);
+
+            // 严格按照 F12 中的结构读取数据：
+            // 读取 action (例如 "DOOR_OPEN")
+            const actionType = payload.action; 
+            
+            // 读取 data 下面的 msg
+            // 使用 ?. 防止 data 为空时报错
+            const message = payload.data?.msg || "无消息内容";
+
+            alert(`【硬件触发】类型: ${actionType}\n消息: ${message}`);
         };
 
         function mockEntry() {
