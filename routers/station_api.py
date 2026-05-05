@@ -38,7 +38,6 @@ async def scan_and_store():
     receiver_name = qr_data.get("receiver_name", "UNKNOWN_NAME")
     receiver_phone = qr_data.get("receiver_phone", "UNKNOWN_PHONE")
 
-    print(tracking_no)
     # 4. 业务入库
     try:
         # 使用真实的 DAO 参数
@@ -48,13 +47,6 @@ async def scan_and_store():
             receiver_phone=receiver_phone,
             status=1,
             extra_info={"company": company, "receiver_name": receiver_name} # 额外信息塞入 dict
-        )
-        # 记录入库日志
-        AccessLogRepository.add_log(
-            user_id=0, 
-            action_type="IN", 
-            snapshot_path="", 
-            picked_parcels=tracking_no
         )
     except Exception as e:
         return APIResponse(code=400, message=f"入库失败，可能是单号已存在: {str(e)}")

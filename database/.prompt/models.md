@@ -4,6 +4,7 @@
 - **`UserRepository`**:
   - `add_user(phone: str, username: str, face_feature: np.ndarray, extra_info: dict = None)`: 新增用户并序列化人脸特征 (NumPy 变 BLOB)。
   - `get_all_active_faces() -> List[dict]`: **高频接口**。系统启动时调用，拉取所有可用人脸进入内存矩阵做 1:N 对比。
+  - `get_user_by_id(user_id: int) -> Optional[dict]`: 【高频接口】根据主键获取用户基本信息字典（已自动剔除 BLOB 人脸特征避免内存溢出）。
   - `get_all_users(limit, offset)`: 【管理端】获取分页用户列表（剔除了 BLOB 特征）。
   - `update_user_status(user_id, is_active)`: 【管理端】软删除/启用用户。
   - `hard_delete_user(user_id)`: 【管理端】物理删除（需慎用）。
