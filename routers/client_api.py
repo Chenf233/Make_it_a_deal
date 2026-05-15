@@ -41,6 +41,8 @@ async def client_entry():
     user = UserRepository.get_user_by_id(user_id)
     if not user:
         return APIResponse(code=404, message="用户数据异常")
+    elif not user.get("is_active"):
+        return APIResponse(code=401, message="您的账户已被禁用，请联系管理员")
 
     # 修复：数据库字典映射到 UserOut
     user_out = UserOut(
@@ -58,7 +60,7 @@ async def client_entry():
         user_id=user_id, 
         action_type="IN", 
         snapshot_path="", 
-        picked_parcels=",".join([p["tracking_no"] for p in parcels])
+        picked_parcels=[p["tracking_no"] for p in parcels]
     )
 
     if hasattr(app_state, "trigger_hardware_alert"):
@@ -87,8 +89,13 @@ async def client_exit():
         return APIResponse(code=401, message="识别失败")
 
     user = UserRepository.get_user_by_id(user_id)
+    if not user or not user.get("is_active"):
+        return APIResponse(code=401, message="您的账户已被禁用，请联系管理员")
     
     parcels = ParcelRepository.get_active_parcels_by_phone(user["phone"])
+    for p in parcels:
+        ParcelRepository.update_parcel_status(p["parcel_id"], 2)   # 状态 2 = 已取件
+
     has_forgotten = len(parcels) > 0
 
     if has_forgotten and hasattr(app_state, "trigger_hardware_alert"):
@@ -101,7 +108,7 @@ async def client_exit():
         user_id=user_id, 
         action_type="OUT", 
         snapshot_path="", 
-        picked_parcels=",".join([p["tracking_no"] for p in parcels])
+        picked_parcels=[p["tracking_no"] for p in parcels]
     )
 
     user_out = UserOut(

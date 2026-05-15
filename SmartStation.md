@@ -128,7 +128,7 @@ recognizer = FaceRecognizer()
 ```
 
 # 已经完成的模块
-目前services中的camera, face recognition, scanner已经完成测试, database也已经完成测试，接下来我正着手于实现整个fastapi后端的搭建和前端html的编写。
+目前services中的camera, face recognition, scanner已经完成测试, database也已经完成测试，接下来我正着手于实现整个fastapi后端的测试和前端html的编写。
 
 # 交互指令
 如果你已经完全理解了项目背景、技术栈、架构约束和目录结构，请回复：

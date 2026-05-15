@@ -24,8 +24,6 @@ async def scan_and_store():
     annotated_frame, qr_data_list = app_state.scanner.scan(frame)
     
     if not qr_data_list:
-        # 记录异常留档
-        AccessLogRepository.add_log(log_type="SCAN_ERROR", user_id=0, details="画面中未解析到有效的二维码")
         return APIResponse(code=400, message="未检测到有效条码/二维码")
 
     # 3. 提取解析数据（假设提取画面中第一个二维码字典）
