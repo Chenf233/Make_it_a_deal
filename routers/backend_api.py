@@ -78,8 +78,8 @@ async def get_access_logs(skip: int = 0, limit: int = 50):
         data.append(AccessLogOut(
             id=log["log_id"],               # 映射 log_id -> id
             user_id=log["user_id"],
-            user_name=log.get("user_name"), # 联表查询可能没有
-            user_phone=log.get("user_phone"),
+            user_name=log.get("username"), # 联表查询可能没有
+            user_phone=log.get("phone"),
             action_type=log["action_type"],
             snapshot_path=log["snapshot_path"] or "",
             picked_parcels=log["picked_parcels"],

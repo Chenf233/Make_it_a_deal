@@ -119,7 +119,7 @@ class ParcelRepository:
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT parcel_id, tracking_no, pickup_code, extra_info 
+                SELECT * 
                 FROM parcels 
                 WHERE receiver_phone = ? AND status = 1
             ''', (phone,))
