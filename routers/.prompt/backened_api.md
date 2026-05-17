@@ -6,7 +6,7 @@
 
 **接口**
 
-### 1. `POST /backend/users` – 注册新用户
+### 1. `POST /api/backend/users` – 注册新用户
 - **输入**：`Form` 参数 `name` (姓名)、`phone` (手机号，需合法格式)，`UploadFile` `file` (人脸照片)。
 - **处理流程**：
   1. 解码图片，调用 `app_state.face_recognizer.extract_feature` 提取人脸特征。
@@ -25,10 +25,10 @@ const form = new FormData();
 form.append("name", "张三");
 form.append("phone", "13800138000");
 form.append("file", imageFile);
-fetch("/backend/users", { method: "POST", body: form })
+fetch("/api/backend/users", { method: "POST", body: form })
 ```
 
-### 2. `GET /backend/parcels` – 包裹管理看板
+### 2. `GET /api/backend/parcels` – 包裹管理看板
 - **输入**：`status`（可选，1/2/3 状态过滤）、`skip`、`limit` 分页参数。
 - **处理流程**：
   1. 通过 `ParcelRepository.get_all_parcels` 获取全量包裹（数据库层暂未支持过滤与分页，路由层做内存过滤切片）。
@@ -36,20 +36,20 @@ fetch("/backend/users", { method: "POST", body: form })
   3. 组装 `ParcelOut` 列表（含 `cabinet_number` 作为取件码）。
 - **外部调用示例**：
 ```javascript
-fetch("/backend/parcels?status=1&skip=0&limit=20")
+fetch("/api/backend/parcels?status=1&skip=0&limit=20")
   .then(res => res.json())
   .then(data => console.log(data.data))
 ```
 
-### 3. `GET /backend/logs` – 出入日志查询
+### 3. `GET /api/backend/logs` – 出入日志查询
 - **输入**：`action_type`（可选，IN/OUT）、`skip`、`limit`。
 - **处理流程**：调用 `AccessLogRepository.get_recent_logs` 获取近期日志（一次性拉取较多记录），路由层按动作过滤并切片，映射字段为 `AccessLogOut` 格式。
 - **外部调用示例**：
 ```javascript
-fetch("/backend/logs?action_type=IN&skip=0&limit=30")
+fetch("/api/backend/logs?action_type=IN&skip=0&limit=30")
 ```
 
-### 4. `GET /backend/users` – 用户分页列表
+### 4. `GET /api/backend/users` – 用户分页列表
 - **输入**：`skip`（偏移量，>=0）、`limit`（每页条数，1~200）。
 - **处理流程**：调用 `UserRepository.get_all_users` 获取分页数据，组装 `UserOut` 列表。
 - **外部调用示例**：
@@ -59,7 +59,7 @@ fetch("/api/backend/users?skip=0&limit=20")
   .then(data => console.log(data.data))
 ```
 
-### 5. `GET /backend/users/{user_id}` – 用户详情
+### 5. `GET /api/backend/users/{user_id}` – 用户详情
 - **输入**：路径参数 `user_id`。
 - **处理流程**：调用 `UserRepository.get_user_by_id`，不存在时返回 `404`。
 - **外部调用示例**：
@@ -69,7 +69,7 @@ fetch("/api/backend/users/3")
   .then(data => console.log(data.data))
 ```
 
-### 6. `PUT /backend/users/{user_id}` – 更新用户信息
+### 6. `PUT /api/backend/users/{user_id}` – 更新用户信息
 - **输入**：路径参数 `user_id`，JSON 体 `{ username?, phone?, extra_info? }`。
 - **处理流程**：调用 `UserRepository.update_user`，传入非空字段；手机号冲突返回 `409`。
 - **外部调用示例**：
@@ -81,7 +81,7 @@ fetch("/api/backend/users/3", {
 })
 ```
 
-### 7. `PUT /backend/users/{user_id}/status` – 启用/禁用用户
+### 7. `PUT /api/backend/users/{user_id}/status` – 启用/禁用用户
 - **输入**：路径参数 `user_id`，JSON 体 `{ is_active: 0|1 }`。
 - **处理流程**：调用 `UserRepository.update_user_status`，不存在返回 `404`。
 - **外部调用示例**：
@@ -93,7 +93,7 @@ fetch("/api/backend/users/3/status", {
 })
 ```
 
-### 8. `DELETE /backend/users/{user_id}` – 删除用户
+### 8. `DELETE /api/backend/users/{user_id}` – 删除用户
 - **输入**：路径参数 `user_id`。
 - **处理流程**：调用 `UserRepository.hard_delete_user`，捕获外键约束异常并返回 `500`。
 - **外部调用示例**：

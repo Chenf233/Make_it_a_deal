@@ -189,7 +189,7 @@ async def get_parcels(
     # 构建手机号->姓名映射
     phone_name_map = _build_user_phone_name_map()
 
-    data = []
+    rdata = []
     for p in page_parcels:
         # 安全解析 extra_info
         extra = json.loads(p.get("extra_info") or "{}") if isinstance(p.get("extra_info"), str) else (p.get("extra_info") or {})
@@ -197,7 +197,7 @@ async def get_parcels(
         # 真实姓名优先从用户表获取，其次取 extra_info 中的字段（兼容旧数据）
         receiver_name = phone_name_map.get(receiver_phone, extra.get("receiver_name", "未知"))
 
-        data.append(ParcelOut(
+        rdata.append(ParcelOut(
             id=p["parcel_id"],
             tracking_no=p["tracking_no"],
             company=extra.get("company", "未知"),
@@ -208,7 +208,8 @@ async def get_parcels(
             in_time=p["in_time"],
             out_time=p.get("out_time")
         ))
-    return APIResponse(data=data)
+    print(rdata)
+    return APIResponse(data=rdata)
 
 
 # ========================
@@ -241,7 +242,7 @@ async def get_access_logs(
             user_phone=log.get("phone", ""),
             action_type=log["action_type"],
             snapshot_path=log.get("snapshot_path", ""),
-            picked_parcels=log.get("picked_parcels"),
+            picked_parcels=json.dumps(log.get("picked_parcels")) if isinstance(log.get("picked_parcels"), list) else log.get("picked_parcels"),
             created_at=log.get("timestamp", "")
         ))
     return APIResponse(data=data)

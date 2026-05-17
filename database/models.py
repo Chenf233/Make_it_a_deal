@@ -232,7 +232,7 @@ class AccessLogRepository:
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT l.log_id, l.action_type, l.timestamp, l.snapshot_path, l.picked_parcels, 
+                SELECT l.log_id, l.action_type, l.timestamp, l.snapshot_path, l.picked_parcels, l.user_id,
                        u.username, u.phone 
                 FROM access_logs l
                 JOIN users u ON l.user_id = u.user_id
