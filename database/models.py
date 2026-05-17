@@ -38,6 +38,7 @@ class UserRepository:
     @classmethod
     def get_user_by_id(cls, user_id: int) -> dict:
         with DatabaseManager.get_connection() as conn:
+            import sqlite3
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute('''
@@ -85,13 +86,42 @@ class UserRepository:
             return results
 
     @staticmethod
-    def update_user_status(user_id: int, is_active: int) -> bool:
+    def update_user(user_id: int, username: str = None, phone: str = None,
+                    extra_info: dict = None, is_active: int = None) -> bool:
+        """
+        通用更新用户基本信息。
+        所有参数除 user_id 外均可选，传入 None 表示不修改该字段。
+        修改 phone 时需确保不与其他用户冲突（依赖数据库 UNIQUE 约束）。
+        """
+        set_parts = []
+        params = []
+        if username is not None:
+            set_parts.append("username = ?")
+            params.append(username)
+        if phone is not None:
+            set_parts.append("phone = ?")
+            params.append(phone)
+        if extra_info is not None:
+            set_parts.append("extra_info = ?")
+            params.append(json.dumps(extra_info))
+        if is_active is not None:
+            set_parts.append("is_active = ?")
+            params.append(is_active)
+        if not set_parts:
+            return False
+        set_parts.append("updated_at = CURRENT_TIMESTAMP")
+        sql = f"UPDATE users SET {', '.join(set_parts)} WHERE user_id = ?"
+        params.append(user_id)
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('UPDATE users SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?', 
-                           (is_active, user_id))
+            cursor.execute(sql, params)
             conn.commit()
             return cursor.rowcount > 0
+
+    @staticmethod
+    def update_user_status(user_id: int, is_active: int) -> bool:
+        """快捷方法：仅修改启用/禁用状态，内部复用 update_user"""
+        return UserRepository.update_user(user_id=user_id, is_active=is_active)
 
     @staticmethod
     def hard_delete_user(user_id: int) -> bool:
@@ -106,19 +136,14 @@ class ParcelRepository:
     @staticmethod
     def add_parcel(tracking_no: str, cabinet_number: str = "", receiver_phone: str = "",
                    status: int = 1, extra_info: dict = None) -> int:
-        """
-        包裹入库。若 cabinet_number 为空，则自动分配未占用的货柜号。
-        pickup_code 自动设为与 cabinet_number 相同，方便前端取件码展示。
-        """
         extra_str = json.dumps(extra_info or {})
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             if not cabinet_number:
-                # 自动分配柜号：查询当前所有在库包裹的 cabinet_number
                 cursor.execute('SELECT cabinet_number FROM parcels WHERE status = 1')
                 occupied = {row['cabinet_number'] for row in cursor.fetchall()}
                 cabinet_number = _generate_cabinet_number(occupied)
-            pickup_code = cabinet_number  # 取件码即为货柜号
+            pickup_code = cabinet_number
             cursor.execute('''
                 INSERT INTO parcels (tracking_no, pickup_code, cabinet_number, receiver_phone, status, extra_info) 
                 VALUES (?, ?, ?, ?, ?, ?)

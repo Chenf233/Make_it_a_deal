@@ -1,6 +1,6 @@
 # 文件：models.py
 
-**职责**：业务数据访问层（Repository），所有 SQL 集中于此，对外暴露纯 Python 方法。**本次更新重点**：`ParcelRepository.add_parcel` 新增货柜号自动分配逻辑，`pickup_code` 自动设为柜号，查询接口均已返回 `cabinet_number`。
+**职责**：核心数据访问层（DAO/Repository），彻底隔离 SQL 语句，负责用户、包裹、日志的完整生命周期管理。本版本新增通用用户更新方法，覆盖后台管理“增删查改”全套需求。
 
 ### 用户仓库 `UserRepository`
 
@@ -10,6 +10,7 @@
 | `get_user_by_id` | `user_id: int` | `dict | None` | 返回用户基本信息字典（不包含 BLOB 人脸特征），字段：`user_id`, `phone`, `username`, `is_active`, `extra_info`, `created_at`, `updated_at`。 |
 | `get_all_active_faces` | 无 | `List[dict]` | 加载所有 `is_active=1` 的用户，返回字典包含 `user_id`, `phone`, `username`, `face_feature`（已反序列化为 `np.float32` 数组）。 |
 | `get_all_users` | `limit: int=100, offset: int=0` | `List[dict]` | 管理端分页列表，不含人脸特征。 |
+| **`update_user`** | `user_id: int`, `username: str=None`, `phone: str=None`, `extra_info: dict=None`, `is_active: int=None` | `bool` | **新增** 通用更新方法。传入 None 的字段保持不变；修改手机号时需注意 UNIQUE 约束。`extra_info` 为 dict 会自动序列化。 |
 | `update_user_status` | `user_id: int, is_active: int` | `bool` | 软启用/禁用，成功返回 `True`。 |
 | `hard_delete_user` | `user_id: int` | `bool` | 物理删除，若有日志外键依赖会失败。 |
 
