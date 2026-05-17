@@ -125,6 +125,8 @@ async def websocket_endpoint(websocket: WebSocket, client_type: str):
 # ==========================
 # 挂载业务路由 (暂注释，待编写)
 # ==========================
-app.include_router(backend_api.router, prefix="/api", tags=["后台管理端"])
-app.include_router(station_api.router, prefix="/api", tags=["驿站工作端"])
-app.include_router(client_api.router, prefix="/api", tags=["客户体验端"])
+app.mount("/static/css", StaticFiles(directory="templates/css"), name="static_css")
+app.mount("/static/js", StaticFiles(directory="templates/js"), name="static_js")
+app.include_router(backend_api.router, prefix="/api")
+app.include_router(station_api.router, prefix="/api")
+app.include_router(client_api.router, prefix="/api")

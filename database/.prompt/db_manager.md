@@ -1,16 +1,13 @@
 # 文件：db_manager.py
-**职责**：管理底层的 SQLite 连接。采用 `@contextmanager` 确保每次 DB 操作后正确释放连接，内部强制开启了 `PRAGMA journal_mode=WAL` (解决读写锁冲突) 和 `PRAGMA foreign_keys=ON`。
+
+**职责**：提供数据库连接管理与表结构初始化。使用上下文管理器自动开启 WAL 模式与外键约束，`init_db` 负责创建/升级表结构（当前版本 `parcels` 表已包含 `cabinet_number` 字段和对应索引）。
+
 **接口**：
-- `DatabaseManager.get_connection()`: 上下文管理器，`yield` 一个配置好的 `sqlite3.Connection`。
-- `DatabaseManager.init_db()`: 幂等操作，负责初始化系统的 3 张核心数据表及索引。
+- `DatabaseManager.get_connection()`：返回上下文管理器，yield 一个 `sqlite3.Connection` 对象，其 `row_factory` 已被设置为 `sqlite3.Row`，支持列名访问。
+- `DatabaseManager.init_db()`：创建 `users`、`parcels`（含 `cabinet_number`）、`access_logs` 三张核心表及相关索引。幂等操作，可重复执行。
+
 **外部调用示例**：
 ```python
 from database.db_manager import DatabaseManager
-
-# 在系统启动 (main.py) 时调用一次
 DatabaseManager.init_db()
-
-# 自定义 SQL 操作 (非必要不推荐，请优先使用 models.py)
-with DatabaseManager.get_connection() as conn:
-    cursor = conn.cursor()
-    # do something...
+```

@@ -53,25 +53,36 @@
 
 ```text
 📦 SmartStation
+┣ 📂 archive_services
+┃ ┣ 📂 Serial
+┃ ┃ ┗ 📜 serial_demo.py
+┃ ┣ 📂 labeldetect
+┃ ┃ ┣ 📜 best.pt
+┃ ┃ ┗ 📜 ver1.py
+┃ ┗ 📂 qr_detect
+┃   ┣ 📜 qr_ver1.py
+┃   ┗ 📜 ver1.db
 ┣ 📂 core
 ┃ ┣ 📂 .prompt
-┃ ┣ 📜 state.py
-┃ ┗ 📜 config.py
+┃ ┣ 📜 config.py
+┃ ┗ 📜 state.py
 ┣ 📂 database
 ┃ ┣ 📂 .prompt
 ┃ ┣ 📂 data
-┃ ┣ 📜 db_manager.py
+┃ ┃ ┗ 📜 smart_station.db
 ┃ ┣ 📜 constants.py
-┃ ┗ 📜 models.py
+┃ ┣ 📜 db_manager.py
+┃ ┣ 📜 models.py
+┃ ┣ 📜 schemas.py
+┃ ┗ 📜 test_db.py
 ┣ 📂 routers
-┃ ┣ 📂 .prompt       # 存放 API 路由规范说明
+┃ ┣ 📂 .prompt
 ┃ ┣ 📜 backend_api.py
 ┃ ┣ 📜 client_api.py
 ┃ ┗ 📜 station_api.py
 ┣ 📂 services
 ┃ ┣ 📂 camera_manager
-┃ ┃ ┣ 📂 .prompt     
-┃ ┃ ┣ 📂 pics        #存放静态图片作为dummy camera的显示对象
+┃ ┃ ┣ 📂 .prompt
 ┃ ┃ ┣ 📜 __init__.py
 ┃ ┃ ┣ 📜 base.py
 ┃ ┃ ┣ 📜 constants.py
@@ -80,12 +91,15 @@
 ┃ ┃ ┗ 📜 test_camera.py
 ┃ ┣ 📂 face_recognition
 ┃ ┃ ┣ 📂 .prompt
-┃ ┃ ┣ 📂 pics
 ┃ ┃ ┣ 📜 __init__.py
 ┃ ┃ ┣ 📜 benchmark.py
 ┃ ┃ ┣ 📜 constants.py
 ┃ ┃ ┣ 📜 core.py
 ┃ ┃ ┗ 📜 test_face.py
+┃ ┣ 📂 pickup
+┃ ┃ ┣ 📂 .prompt
+┃ ┃ ┣ 📜 __init__.py
+┃ ┃ ┗ 📜 core.py
 ┃ ┗ 📂 scanner
 ┃   ┣ 📂 .prompt
 ┃   ┣ 📜 __init__.py
@@ -93,12 +107,12 @@
 ┃   ┣ 📜 core.py
 ┃   ┣ 📜 generator.py
 ┃   ┗ 📜 test_scanner.py
-┣ 📂 templates #待定，可能会拆分html方便管理样式，目前只做简单的演示
+┣ 📂 templates
 ┃ ┣ 📜 backend.html
 ┃ ┣ 📜 client.html
 ┃ ┗ 📜 station.html
-┣ 📜 SmartStation.md
-┗ 📜 main.py
+┣ 📜 main.py
+┗ 📜 requirements.txt
 ```
 # 样例markdown
 ```text
@@ -128,9 +142,9 @@ recognizer = FaceRecognizer()
 ```
 
 # 已经完成的模块
-目前services中的camera, face recognition, scanner已经完成测试, database也已经完成测试，接下来我正着手于实现整个fastapi后端的测试和前端html的编写。
+全部已完成，接下来需要更改某些功能，并移植到含bpu和aarch64的RDk X5上
 
 # 交互指令
 如果你已经完全理解了项目背景、技术栈、架构约束和目录结构，请回复：
 “我已经完全掌握了 SmartStation 的架构设计与约束。请发送您希望开始实现的第一步, 我将为您输出生产级别的优质代码。”
-请不要在第一次回复中输出任何实现代码, 如果你对这个项目的描述有任何疑问或者建议，也可以提出.
+请不要在第一次回复中输出任何实现代码, 如果你对这个项目的描述有任何疑问或者建议，也可以提出.开发的时候如果不知道原来的实现，禁止猜测，直接终止代码生成向我问清楚说明文档或者具体代码实现。
