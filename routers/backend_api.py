@@ -29,7 +29,7 @@ from database.schemas import (
 
 class UserUpdateRequest(BaseModel):
     username: Optional[str] = Field(None, min_length=1, max_length=50)
-    phone: Optional[str] = Field(None, regex=r"^1[3-9]\d{9}$")
+    phone: Optional[str] = Field(None, pattern=r"^1[3-9]\d{9}$")
     extra_info: Optional[dict] = None
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def _build_user_phone_name_map() -> dict:
 @router.post("/users", response_model=APIResponse)
 async def register_user(
     name: str = Form(..., min_length=1, max_length=50),
-    phone: str = Form(..., regex=r"^1[3-9]\d{9}$"),
+    phone: str = Form(..., pattern=r"^1[3-9]\d{9}$"),
     file: UploadFile = File(...)
 ):
     """
@@ -216,7 +216,7 @@ async def get_parcels(
 # ========================
 @router.get("/logs", response_model=APIResponse)
 async def get_access_logs(
-    action_type: Optional[str] = Query(None, regex="^(IN|OUT)$"),
+    action_type: Optional[str] = Query(None, pattern="^(IN|OUT)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200)
 ):

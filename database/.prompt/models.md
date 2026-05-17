@@ -18,7 +18,7 @@
 
 | 方法 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
-| `add_parcel` | `tracking_no: str`, `cabinet_number: str=""`, `receiver_phone: str`, `status: int=1`, `extra_info: dict` | `int` (parcel_id) | **关键变更**：若 `cabinet_number` 为空，则自动从未占用的柜号池中随机分配（格式`前缀+两位数字`，如`A03`）。`pickup_code` 自动设为分配的 `cabinet_number`。若柜满抛出 `RuntimeError`。 |
+| `add_parcel` | `tracking_no: str`, `cabinet_number: str=""`, `receiver_phone: str`, `status: int=1`, `extra_info: dict` | `dict` (parcel表那行的所有信息) | **关键变更**：若 `cabinet_number` 为空，则自动从未占用的柜号池中随机分配（格式`前缀+两位数字`，如`A03`）。`pickup_code` 自动设为分配的 `cabinet_number`。若柜满抛出 `RuntimeError`。 |
 | `get_active_parcels_by_phone` | `phone: str` | `List[dict]` | 查询指定手机号的所有 `status=1` (在库) 包裹，返回字段含 `parcel_id`, `tracking_no`, `cabinet_number`, `extra_info`。**前端取件码即为 `cabinet_number`**。 |
 | `get_all_parcels` | `limit: int=100, offset: int=0` | `List[dict]` | 管理端看板，返回所有包裹字段（含 `cabinet_number`）。 |
 | `update_parcel_status` | `parcel_id: int, new_status: int` | `bool` | 更新包裹状态，若 `new_status=2`（已取件）则自动设置 `out_time`。 |

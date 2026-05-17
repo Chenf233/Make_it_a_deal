@@ -135,7 +135,11 @@ class UserRepository:
 class ParcelRepository:
     @staticmethod
     def add_parcel(tracking_no: str, cabinet_number: str = "", receiver_phone: str = "",
-                   status: int = 1, extra_info: dict = None) -> int:
+                   status: int = 1, extra_info: dict = None) -> dict:
+        """
+        包裹入库。若 cabinet_number 为空则自动分配。
+        返回新增包裹的完整信息字典（含 cabinet_number）。
+        """
         extra_str = json.dumps(extra_info or {})
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
@@ -149,7 +153,13 @@ class ParcelRepository:
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', (tracking_no, pickup_code, cabinet_number, receiver_phone, status, extra_str))
             conn.commit()
-            return cursor.lastrowid
+            new_id = cursor.lastrowid
+            # 查询完整信息返回
+            cursor.execute('SELECT * FROM parcels WHERE parcel_id = ?', (new_id,))
+            row = cursor.fetchone()
+            result = dict(row)
+            result['extra_info'] = json.loads(result['extra_info']) if result['extra_info'] else {}
+            return result
 
     @staticmethod
     def get_active_parcels_by_phone(phone: str):

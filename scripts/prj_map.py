@@ -69,5 +69,5 @@ if __name__ == '__main__':
     project_name = os.path.basename(os.path.abspath(root_directory))
     
     print(f"📦 {project_name}")
-    patterns = load_gitignore(root_directory)
+    patterns = load_gitignore(root_directory) + ['*.md', 'scripts', 'pics']
     generate_tree(root_directory, ignore_patterns=patterns)

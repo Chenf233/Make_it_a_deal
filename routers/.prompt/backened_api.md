@@ -49,9 +49,61 @@ fetch("/backend/parcels?status=1&skip=0&limit=20")
 fetch("/backend/logs?action_type=IN&skip=0&limit=30")
 ```
 
+### 4. `GET /backend/users` – 用户分页列表
+- **输入**：`skip`（偏移量，>=0）、`limit`（每页条数，1~200）。
+- **处理流程**：调用 `UserRepository.get_all_users` 获取分页数据，组装 `UserOut` 列表。
+- **外部调用示例**：
+```javascript
+fetch("/api/backend/users?skip=0&limit=20")
+  .then(res => res.json())
+  .then(data => console.log(data.data))
+```
+
+### 5. `GET /backend/users/{user_id}` – 用户详情
+- **输入**：路径参数 `user_id`。
+- **处理流程**：调用 `UserRepository.get_user_by_id`，不存在时返回 `404`。
+- **外部调用示例**：
+```javascript
+fetch("/api/backend/users/3")
+  .then(res => res.json())
+  .then(data => console.log(data.data))
+```
+
+### 6. `PUT /backend/users/{user_id}` – 更新用户信息
+- **输入**：路径参数 `user_id`，JSON 体 `{ username?, phone?, extra_info? }`。
+- **处理流程**：调用 `UserRepository.update_user`，传入非空字段；手机号冲突返回 `409`。
+- **外部调用示例**：
+```javascript
+fetch("/api/backend/users/3", {
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ phone: "13900001111" })
+})
+```
+
+### 7. `PUT /backend/users/{user_id}/status` – 启用/禁用用户
+- **输入**：路径参数 `user_id`，JSON 体 `{ is_active: 0|1 }`。
+- **处理流程**：调用 `UserRepository.update_user_status`，不存在返回 `404`。
+- **外部调用示例**：
+```javascript
+fetch("/api/backend/users/3/status", {
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ is_active: 0 })
+})
+```
+
+### 8. `DELETE /backend/users/{user_id}` – 删除用户
+- **输入**：路径参数 `user_id`。
+- **处理流程**：调用 `UserRepository.hard_delete_user`，捕获外键约束异常并返回 `500`。
+- **外部调用示例**：
+```javascript
+fetch("/api/backend/users/3", { method: "DELETE" })
+
 **TODO**
 - 将包裹列表的状态过滤、分页逻辑下推到 `ParcelRepository` 的 SQL 层，避免全量加载。
 - 日志接口同理，需增加 `AccessLogRepository.get_logs_filtered` 方法。
 - 用户录入时增加图片存档功能。
 - 抽象全局 `app_state` 依赖，改用 FastAPI 依赖注入。
-```
+- 当前 `UserOut` 未包含 `extra_info` 字段，管理端无法展示附加信息；待 `schemas.py` 中 `UserOut` 补充该字段后再行返回。
+- 分页列表接口可扩展搜索（按姓名/手机号模糊匹配），需数据库层支持。

@@ -53,25 +53,36 @@
 
 ```text
 📦 SmartStation
+┣ 📂 archive_services
+┃ ┣ 📂 Serial
+┃ ┃ ┗ 📜 serial_demo.py
+┃ ┣ 📂 labeldetect
+┃ ┃ ┣ 📜 best.pt
+┃ ┃ ┗ 📜 ver1.py
+┃ ┗ 📂 qr_detect
+┃   ┣ 📜 qr_ver1.py
+┃   ┗ 📜 ver1.db
 ┣ 📂 core
 ┃ ┣ 📂 .prompt
-┃ ┣ 📜 state.py
-┃ ┗ 📜 config.py
+┃ ┣ 📜 config.py
+┃ ┗ 📜 state.py
 ┣ 📂 database
 ┃ ┣ 📂 .prompt
 ┃ ┣ 📂 data
-┃ ┣ 📜 db_manager.py
+┃ ┃ ┗ 📜 smart_station.db
 ┃ ┣ 📜 constants.py
-┃ ┗ 📜 models.py
+┃ ┣ 📜 db_manager.py
+┃ ┣ 📜 models.py
+┃ ┣ 📜 schemas.py
+┃ ┗ 📜 test_db.py
 ┣ 📂 routers
-┃ ┣ 📂 .prompt       # 存放 API 路由规范说明
+┃ ┣ 📂 .prompt
 ┃ ┣ 📜 backend_api.py
 ┃ ┣ 📜 client_api.py
 ┃ ┗ 📜 station_api.py
 ┣ 📂 services
 ┃ ┣ 📂 camera_manager
-┃ ┃ ┣ 📂 .prompt     
-┃ ┃ ┣ 📂 pics        #存放静态图片作为dummy camera的显示对象
+┃ ┃ ┣ 📂 .prompt
 ┃ ┃ ┣ 📜 __init__.py
 ┃ ┃ ┣ 📜 base.py
 ┃ ┃ ┣ 📜 constants.py
@@ -80,12 +91,15 @@
 ┃ ┃ ┗ 📜 test_camera.py
 ┃ ┣ 📂 face_recognition
 ┃ ┃ ┣ 📂 .prompt
-┃ ┃ ┣ 📂 pics
 ┃ ┃ ┣ 📜 __init__.py
 ┃ ┃ ┣ 📜 benchmark.py
 ┃ ┃ ┣ 📜 constants.py
 ┃ ┃ ┣ 📜 core.py
 ┃ ┃ ┗ 📜 test_face.py
+┃ ┣ 📂 pickup
+┃ ┃ ┣ 📂 .prompt
+┃ ┃ ┣ 📜 __init__.py
+┃ ┃ ┗ 📜 core.py
 ┃ ┗ 📂 scanner
 ┃   ┣ 📂 .prompt
 ┃   ┣ 📜 __init__.py
@@ -93,12 +107,12 @@
 ┃   ┣ 📜 core.py
 ┃   ┣ 📜 generator.py
 ┃   ┗ 📜 test_scanner.py
-┣ 📂 templates #待定，可能会拆分html方便管理样式，目前只做简单的演示
+┣ 📂 templates
 ┃ ┣ 📜 backend.html
 ┃ ┣ 📜 client.html
 ┃ ┗ 📜 station.html
-┣ 📜 SmartStation.md
-┗ 📜 main.py
+┣ 📜 main.py
+┗ 📜 requirements.txt
 ```
 # 样例markdown
 ```text
