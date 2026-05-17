@@ -1,6 +1,25 @@
 import json
+import random
 import numpy as np
 from database.db_manager import DatabaseManager
+from database.constants import (
+    CABINET_PREFIXES,
+    CABINET_NUM_MIN,
+    CABINET_NUM_MAX,
+    CABINET_MAX_CAPACITY
+)
+
+def _generate_cabinet_number(existing_numbers: set) -> str:
+    """从尚未占用的货柜号中随机选一个返回，若已满则抛出异常"""
+    if len(existing_numbers) >= CABINET_MAX_CAPACITY:
+        raise RuntimeError("所有货柜已满，无法分配新柜号")
+    occupied = set(existing_numbers)
+    while True:
+        prefix = random.choice(CABINET_PREFIXES)
+        num = random.randint(CABINET_NUM_MIN, CABINET_NUM_MAX)
+        candidate = f"{prefix}{num:02d}"
+        if candidate not in occupied:
+            return candidate
 
 class UserRepository:
     @staticmethod
@@ -18,32 +37,23 @@ class UserRepository:
 
     @classmethod
     def get_user_by_id(cls, user_id: int) -> dict:
-        """
-        根据 user_id 获取用户信息（已剔除人脸特征 BLOB 数据以节省内存）
-        """
         with DatabaseManager.get_connection() as conn:
-            # 如果您的 DatabaseManager 默认没开启字典映射，这里强制使用 sqlite3.Row
-            import sqlite3
-            conn.row_factory = sqlite3.Row 
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            
             cursor.execute('''
                 SELECT user_id, phone, username, is_active, extra_info, created_at, updated_at
                 FROM users 
                 WHERE user_id = ?
             ''', (user_id,))
-            
             row = cursor.fetchone()
             return dict(row) if row else None
 
     @staticmethod
     def get_all_active_faces():
-        """【业务端】启动时，加载所有 active=1 的人脸向量到内存"""
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT user_id, phone, username, face_feature FROM users WHERE is_active = 1')
-            
-            results =[]
+            results = []
             for row in cursor.fetchall():
                 results.append({
                     "user_id": row['user_id'],
@@ -53,21 +63,16 @@ class UserRepository:
                 })
             return results
 
-    # ================= 管理端 (Backend) 接口 =================
-
     @staticmethod
     def get_all_users(limit: int = 100, offset: int = 0):
-        """【管理端】分页获取所有用户信息（包含被禁用的），用于前端用户列表页"""
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
-            # 注意：管理端不需要拉取庞大的 face_feature 二进制数据，节约带宽
             cursor.execute('''
                 SELECT user_id, phone, username, is_active, extra_info, created_at 
                 FROM users 
                 ORDER BY created_at DESC LIMIT ? OFFSET ?
             ''', (limit, offset))
-            
-            results =[]
+            results = []
             for row in cursor.fetchall():
                 results.append({
                     "user_id": row['user_id'],
@@ -81,7 +86,6 @@ class UserRepository:
 
     @staticmethod
     def update_user_status(user_id: int, is_active: int) -> bool:
-        """【管理端】软删除/禁用/恢复 用户"""
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('UPDATE users SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?', 
@@ -91,10 +95,8 @@ class UserRepository:
 
     @staticmethod
     def hard_delete_user(user_id: int) -> bool:
-        """【管理端】危险操作：物理删除用户（需确保没有关联的外键日志）"""
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
-            # 开启外键约束时，如果有 log 依赖会导致报错，这是预期的保护机制
             cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
             conn.commit()
             return cursor.rowcount > 0
@@ -102,70 +104,73 @@ class UserRepository:
 
 class ParcelRepository:
     @staticmethod
-    def add_parcel(tracking_no: str, pickup_code: str, receiver_phone: str, status: int = 1, extra_info: dict = None) -> int:
+    def add_parcel(tracking_no: str, cabinet_number: str = "", receiver_phone: str = "",
+                   status: int = 1, extra_info: dict = None) -> int:
+        """
+        包裹入库。若 cabinet_number 为空，则自动分配未占用的货柜号。
+        pickup_code 自动设为与 cabinet_number 相同，方便前端取件码展示。
+        """
         extra_str = json.dumps(extra_info or {})
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
+            if not cabinet_number:
+                # 自动分配柜号：查询当前所有在库包裹的 cabinet_number
+                cursor.execute('SELECT cabinet_number FROM parcels WHERE status = 1')
+                occupied = {row['cabinet_number'] for row in cursor.fetchall()}
+                cabinet_number = _generate_cabinet_number(occupied)
+            pickup_code = cabinet_number  # 取件码即为货柜号
             cursor.execute('''
-                INSERT INTO parcels (tracking_no, pickup_code, receiver_phone, status, extra_info) 
-                VALUES (?, ?, ?, ?, ?)
-            ''', (tracking_no, pickup_code, receiver_phone, status, extra_str))
+                INSERT INTO parcels (tracking_no, pickup_code, cabinet_number, receiver_phone, status, extra_info) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (tracking_no, pickup_code, cabinet_number, receiver_phone, status, extra_str))
             conn.commit()
             return cursor.lastrowid
 
     @staticmethod
     def get_active_parcels_by_phone(phone: str):
-        """【业务端】查询某用户当前在库的所有包裹"""
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT * 
+                SELECT parcel_id, tracking_no, cabinet_number, extra_info
                 FROM parcels 
                 WHERE receiver_phone = ? AND status = 1
             ''', (phone,))
-            
-            results =[]
+            results = []
             for row in cursor.fetchall():
                 results.append({
                     "parcel_id": row['parcel_id'],
                     "tracking_no": row['tracking_no'],
-                    "pickup_code": row['pickup_code'],
+                    "cabinet_number": row['cabinet_number'],
                     "extra_info": json.loads(row['extra_info']) if row['extra_info'] else {}
                 })
             return results
 
-    # ================= 管理端 (Backend) 接口 =================
-
     @staticmethod
     def get_all_parcels(limit: int = 100, offset: int = 0):
-        """【管理端】获取包裹数据看板列表"""
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT parcel_id, tracking_no, pickup_code, receiver_phone, status, in_time, out_time, extra_info 
+                SELECT parcel_id, tracking_no, pickup_code, cabinet_number, receiver_phone, status, in_time, out_time, extra_info 
                 FROM parcels 
                 ORDER BY in_time DESC LIMIT ? OFFSET ?
             ''', (limit, offset))
-            return[dict(row) for row in cursor.fetchall()]
+            return [dict(row) for row in cursor.fetchall()]
 
     @staticmethod
     def update_parcel_status(parcel_id: int, new_status: int) -> bool:
-        """
-        【业务/管理端】更新包裹状态（如客户取走包裹，状态变为 2）
-        如果是出库动作 (status=2)，系统自动记录 out_time
-        """
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
-            if new_status == 2:  # 2 表示已取走出库
-                cursor.execute('UPDATE parcels SET status = ?, out_time = CURRENT_TIMESTAMP WHERE parcel_id = ?', (new_status, parcel_id))
+            if new_status == 2:
+                cursor.execute('UPDATE parcels SET status = ?, out_time = CURRENT_TIMESTAMP WHERE parcel_id = ?', 
+                               (new_status, parcel_id))
             else:
-                cursor.execute('UPDATE parcels SET status = ? WHERE parcel_id = ?', (new_status, parcel_id))
+                cursor.execute('UPDATE parcels SET status = ? WHERE parcel_id = ?', 
+                               (new_status, parcel_id))
             conn.commit()
             return cursor.rowcount > 0
 
     @staticmethod
     def delete_parcel(parcel_id: int) -> bool:
-        """【管理端】删除录入错误的包裹单"""
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM parcels WHERE parcel_id = ?', (parcel_id,))
@@ -175,8 +180,9 @@ class ParcelRepository:
 
 class AccessLogRepository:
     @staticmethod
-    def add_log(user_id: int, action_type: str, snapshot_path: str = "", picked_parcels: list = None) -> int:
-        parcels_str = json.dumps(picked_parcels or[])
+    def add_log(user_id: int, action_type: str, snapshot_path: str = "",
+                picked_parcels: list = None) -> int:
+        parcels_str = json.dumps(picked_parcels or [])
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -186,14 +192,10 @@ class AccessLogRepository:
             conn.commit()
             return cursor.lastrowid
 
-    # ================= 管理端 (Backend) 接口 =================
-    
     @staticmethod
     def get_recent_logs(limit: int = 50):
-        """【管理端】获取进出人员监控面板的数据"""
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
-            # 联表查询：方便直接展示人名和手机号，而不是干巴巴的 user_id
             cursor.execute('''
                 SELECT l.log_id, l.action_type, l.timestamp, l.snapshot_path, l.picked_parcels, 
                        u.username, u.phone 
@@ -201,10 +203,9 @@ class AccessLogRepository:
                 JOIN users u ON l.user_id = u.user_id
                 ORDER BY l.timestamp DESC LIMIT ?
             ''', (limit,))
-            
-            results =[]
+            results = []
             for row in cursor.fetchall():
                 row_dict = dict(row)
-                row_dict['picked_parcels'] = json.loads(row_dict['picked_parcels']) if row_dict['picked_parcels'] else[]
+                row_dict['picked_parcels'] = json.loads(row_dict['picked_parcels']) if row_dict['picked_parcels'] else []
                 results.append(row_dict)
             return results
