@@ -10,6 +10,42 @@
     <p>监控视频流占位区：</p>
     <!-- <img src="/api/station/video_feed" width="640" height="480" style="border: 1px solid black;" /> -->
 
+    <hr>
+    <h2>电机1控制</h2>
+    <button onclick="motorControl('left')">下降半圈</button>
+<button id="motorLeftBtn" onmousedown="pressStart(1,'left')" onmouseup="pressEnd(1,'left')" onmouseleave="pressEnd(1,'left')" ontouchstart="pressStart(1,'left')" ontouchend="pressEnd(1,'left')">下降按住连续转</button>
+    <button onclick="motorControl('right')">上升半圈</button>
+<button onmousedown="pressStart(1,'right')" onmouseup="pressEnd(1,'right')" onmouseleave="pressEnd(1,'right')" ontouchstart="pressStart(1,'right')" ontouchend="pressEnd(1,'right')">上升按住连续转</button>
+    <p id="motorStatus"></p>
+
+    <hr>
+    <h2>电机2控制</h2>
+    <button onclick="motorControl2('left')">左旋半圈</button>
+<button onmousedown="pressStart(2,'left')" onmouseup="pressEnd(2,'left')" onmouseleave="pressEnd(2,'left')" ontouchstart="pressStart(2,'left')" ontouchend="pressEnd(2,'left')">左旋按住连续转</button>
+    <button onclick="motorControl2('right')">右旋半圈</button>
+<button onmousedown="pressStart(2,'right')" onmouseup="pressEnd(2,'right')" onmouseleave="pressEnd(2,'right')" ontouchstart="pressStart(2,'right')" ontouchend="pressEnd(2,'right')">右旋按住连续转</button>
+    <p id="motorStatus2"></p>
+    <!-- <img src="/api/station/video_feed" width="640" height="480" style="border: 1px solid black;" /> -->
+
+    <hr>
+    <h2>蜂鸣器控制</h2>
+    <button onclick="buzzerStart(1)">蜂鸣器1 启动</button>
+    <button onclick="buzzerStop(1)">蜂鸣器1 停止</button>
+    <button onclick="buzzerStart(2)">蜂鸣器2 启动</button>
+    <button onclick="buzzerStop(2)">蜂鸣器2 停止</button>
+    <p id="buzzerStatus"></p>
+
+    <hr>
+    <h2>电机3控制（直流电机，5秒）</h2>
+    <button onclick="motor3Control('ccw')">逆时针旋转5秒</button>
+    <button onclick="motor3Control('cw')">顺时针旋转5秒</button>
+    <p id="motorStatus3"></p>
+
+    <hr>
+    <h2>快捷操作</h2>
+    <button onclick="moveToA02()">快捷操作：电机2左旋20圈→电机3顺时针10s→电机2右旋20圈</button>
+    <p id="moveStatus"></p>
+
     <script>
         const ws = new WebSocket(`ws://${window.location.host}/ws/station`);
         ws.onopen = () => console.log("✅ 驿站端 WebSocket 已连接");
@@ -23,6 +59,137 @@
                 .then(data => alert(JSON.stringify(data)))
                 .catch(err => console.error(err));
         }
-    </script>
+        function motorControl(direction) {
+            const status = document.getElementById("motorStatus");
+            status.textContent = direction === "left" ? "⏳ 下降中..." : "⏳ 上升中...";
+            fetch("/api/station/motor/" + direction, { method: "POST" })
+                .then(res => res.json())
+                .then(data => status.textContent = data.message)
+                .catch(err => {
+                    status.textContent = "❌ 电机失败";
+                    console.error(err);
+                });
+        }
+
+        function motorControl2(direction) {
+            const status = document.getElementById("motorStatus2");
+            status.textContent = direction === "left" ? "⏳ 左旋中..." : "⏳ 右旋中...";
+            fetch("/api/station/motor2/" + direction, { method: "POST" })
+                .then(res => res.json())
+                .then(data => status.textContent = data.message)
+                .catch(err => {
+                    status.textContent = "❌ 电机2失败";
+                    console.error(err);
+                });
+        }
+        function motor3Control(direction) {
+            const status = document.getElementById("motorStatus3");
+            const label = direction === "cw" ? "顺时针" : "逆时针";
+            status.textContent = "⏳ " + label + "旋转5秒中...";
+            fetch("/api/station/motor3/" + direction, { method: "POST" })
+                .then(res => res.json())
+                .then(data => status.textContent = data.message)
+                .catch(err => {
+                    status.textContent = "❌ 电机3失败";
+                    console.error(err);
+                });
+        }
+        function buzzerStart(num) {
+            const status = document.getElementById("buzzerStatus");
+            status.textContent = "🔊 蜂鸣器" + num + " 启动中...";
+            fetch("/api/station/buzzer/" + num + "/start", { method: "POST" })
+                .then(res => res.json())
+                .then(data => status.textContent = data.message)
+                .catch(err => {
+                    status.textContent = "❌ 蜂鸣器" + num + " 启动失败";
+                    console.error(err);
+                });
+        }
+        function buzzerStop(num) {
+            const status = document.getElementById("buzzerStatus");
+            status.textContent = "🔇 蜂鸣器" + num + " 停止中...";
+            fetch("/api/station/buzzer/" + num + "/stop", { method: "POST" })
+                .then(res => res.json())
+                .then(data => status.textContent = data.message)
+                .catch(err => {
+                    status.textContent = "❌ 蜂鸣器" + num + " 停止失败";
+                    console.error(err);
+                });
+        }
+        function moveToA02() {
+            const status = document.getElementById("moveStatus");
+            status.textContent = "⏳ 正在执行快捷操作...";
+            fetch("/api/station/move_to_a02", { method: "POST" })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 200) {
+                        status.textContent = "✅ " + data.message;
+                    } else {
+                        status.textContent = "❌ " + data.message;
+                    }
+                })
+                .catch(err => {
+                    status.textContent = "❌ 移库失败";
+                    console.error(err);
+                });
+        }
+    
+const pressState = {};
+
+function pressStart(motor, direction) {
+    const key = motor + '_' + direction;
+    const existing = pressState[key];
+    if (existing && (existing.timer || existing.running)) return;
+
+    const state = { timer: null, running: false };
+    pressState[key] = state;
+
+    state.timer = setTimeout(() => {
+        state.timer = null;
+        state.running = true;
+        const prefix = motor === 1 ? '' : '2';
+        const statusEl = document.getElementById(motor === 1 ? 'motorStatus' : 'motorStatus2');
+        const dirLabel = motor === 1
+            ? (direction === 'left' ? '下降' : '上升')
+            : (direction === 'left' ? '左旋' : '右旋');
+        statusEl.textContent = '电机' + motor + '开始' + dirLabel + '连续...';
+        fetch('/api/station/motor' + prefix + '/' + direction + '/start', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => statusEl.textContent = data.message)
+            .catch(err => {
+                statusEl.textContent = '电机启动失败';
+                console.error(err);
+            });
+    }, 500);
+}
+
+function pressEnd(motor, direction) {
+    const key = motor + '_' + direction;
+    const state = pressState[key];
+    if (!state) return;
+
+    if (state.timer) {
+        clearTimeout(state.timer);
+        delete pressState[key];
+        return;
+    }
+
+    if (state.running) {
+        state.running = false;
+        const prefix = motor === 1 ? '' : '2';
+        const statusEl = document.getElementById(motor === 1 ? 'motorStatus' : 'motorStatus2');
+        statusEl.textContent = '电机' + motor + '停止中...';
+        fetch('/api/station/motor' + prefix + '/' + direction + '/stop', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => statusEl.textContent = data.message)
+            .catch(err => {
+                statusEl.textContent = '电机停止失败';
+                console.error(err);
+            });
+    }
+    delete pressState[key];
+}
+
+</script>
 </body>
 </html>

@@ -62,7 +62,7 @@
         try {
             const resp = await fetch(`/api/backend/users?skip=${skip}&limit=${limit}`);
             const json = await resp.json();
-            if (!resp.ok) throw new Error(json.detail || '加载用户失败');
+            if (!resp.ok) throw new Error(json.message || '加载用户失败');
             renderUsers(json.data);
         } catch (e) {
             tbody.innerHTML = `<tr class="table-placeholder"><td colspan="6">加载出错：${e.message}</td></tr>`;
@@ -109,7 +109,7 @@
         try {
             const resp = await fetch(`/api/backend/users/${id}`);
             const json = await resp.json();
-            if (!resp.ok) throw new Error(json.detail || '获取用户信息失败');
+            if (!resp.ok) throw new Error(json.message || '获取用户信息失败');
             const u = json.data;
             $('#user-id').value = u.id;
             $('#user-name').value = u.name || '';
@@ -130,7 +130,7 @@
                 body: JSON.stringify({ is_active: parseInt(newStatus) })
             });
             const json = await resp.json();
-            if (!resp.ok) throw new Error(json.detail || '操作失败');
+            if (!resp.ok) throw new Error(json.message || '操作失败');
             showToast('状态更新成功');
             loadUsers();
         } catch (e) {
@@ -145,7 +145,7 @@
             try {
                 const resp = await fetch(`/api/backend/users/${id}`, { method: 'DELETE' });
                 const json = await resp.json();
-                if (!resp.ok) throw new Error(json.detail || '删除失败');
+                if (!resp.ok) throw new Error(json.message || '删除失败');
                 showToast('用户已删除');
                 loadUsers();
             } catch (e) {
@@ -188,7 +188,7 @@
             try {
                 const resp = await fetch('/api/backend/users', { method: 'POST', body: form });
                 const json = await resp.json();
-                if (!resp.ok) throw new Error(json.detail || '注册失败');
+                if (!resp.ok) throw new Error(json.message || '注册失败');
                 showToast('用户注册成功');
                 closeModal('modal-user');
                 loadUsers();
@@ -204,7 +204,7 @@
                     body: JSON.stringify(body)
                 });
                 const json = await resp.json();
-                if (!resp.ok) throw new Error(json.detail || '更新失败');
+                if (!resp.ok) throw new Error(json.message || '更新失败');
                 showToast('用户信息已更新');
                 closeModal('modal-user');
                 loadUsers();
@@ -260,7 +260,7 @@
         try {
             const resp = await fetch(url);
             const json = await resp.json();
-            if (!resp.ok) throw new Error(json.detail || '加载包裹失败');
+            if (!resp.ok) throw new Error(json.message || '加载包裹失败');
             renderParcels(json.data);
         } catch (e) {
             tbody.innerHTML = `<tr class="table-placeholder"><td colspan="8">${e.message}</td></tr>`;
@@ -299,7 +299,7 @@
         try {
             const resp = await fetch(`/api/backend/parcels/${id}`);
             const json = await resp.json();
-            if (!resp.ok) throw new Error(json.detail || '获取包裹信息失败');
+            if (!resp.ok) throw new Error(json.message || '获取包裹信息失败');
             const p = json.data;
             $('#parcel-id').value = p.id;
             $('#parcel-tracking').value = p.tracking_no || '';
@@ -322,7 +322,7 @@
             try {
                 const resp = await fetch(`/api/backend/parcels/${id}`, { method: 'DELETE' });
                 const json = await resp.json();
-                if (!resp.ok) throw new Error(json.detail || '删除失败');
+                if (!resp.ok) throw new Error(json.message || '删除失败');
                 showToast('包裹已删除');
                 loadParcels();
             } catch (e) {
@@ -353,7 +353,7 @@
                 const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, status });
                 const resp = await fetch('/api/backend/parcels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
                 const json = await resp.json();
-                if (!resp.ok) throw new Error(json.detail || json.message || '入库失败');
+                if (!resp.ok) throw new Error(json.message || json.message || '入库失败');
                 showToast('包裹入库成功');
                 closeModal('modal-parcel');
                 loadParcels();
@@ -365,7 +365,7 @@
                 const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, status });
                 const resp = await fetch(`/api/backend/parcels/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
                 const json = await resp.json();
-                if (!resp.ok) throw new Error(json.detail || json.message || '更新失败');
+                if (!resp.ok) throw new Error(json.message || json.message || '更新失败');
                 showToast('包裹信息已更新');
                 closeModal('modal-parcel');
                 loadParcels();
@@ -395,7 +395,7 @@
         try {
             const resp = await fetch(url);
             const json = await resp.json();
-            if (!resp.ok) throw new Error(json.detail || '加载日志失败');
+            if (!resp.ok) throw new Error(json.message || '加载日志失败');
             renderLogs(json.data);
         } catch (e) {
             tbody.innerHTML = `<tr class="table-placeholder"><td colspan="4">${e.message}</td></tr>`;

@@ -159,6 +159,7 @@ async def toggle_user_status(user_id: int, body: StatusToggle):
 @router.delete("/users/{user_id}", response_model=APIResponse)
 async def delete_user(user_id: int):
     try:
+        AccessLogRepository.delete_logs_by_user_id(user_id)
         ok = UserRepository.hard_delete_user(user_id)
         if not ok:
             return APIResponse(code=404, message="用户不存在")

@@ -1,5 +1,6 @@
 import json
 import random
+from datetime import datetime
 import numpy as np
 from database.db_manager import DatabaseManager
 from database.constants import (
@@ -141,6 +142,7 @@ class ParcelRepository:
         返回新增包裹的完整信息字典（含 cabinet_number）。
         """
         extra_str = json.dumps(extra_info or {})
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             if not cabinet_number:
@@ -149,9 +151,9 @@ class ParcelRepository:
                 cabinet_number = _generate_cabinet_number(occupied)
             pickup_code = cabinet_number
             cursor.execute('''
-                INSERT INTO parcels (tracking_no, pickup_code, cabinet_number, receiver_phone, status, extra_info) 
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (tracking_no, pickup_code, cabinet_number, receiver_phone, status, extra_str))
+                INSERT INTO parcels (tracking_no, pickup_code, cabinet_number, receiver_phone, status, extra_info, in_time) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (tracking_no, pickup_code, cabinet_number, receiver_phone, status, extra_str, now_str))
             conn.commit()
             new_id = cursor.lastrowid
             # 查询完整信息返回
@@ -219,11 +221,12 @@ class ParcelRepository:
 
     @staticmethod
     def update_parcel_status(parcel_id: int, new_status: int) -> bool:
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if new_status == 2 else None
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             if new_status == 2:
-                cursor.execute('UPDATE parcels SET status = ?, out_time = CURRENT_TIMESTAMP WHERE parcel_id = ? AND status = 1', 
-                               (new_status, parcel_id))
+                cursor.execute('UPDATE parcels SET status = ?, out_time = ? WHERE parcel_id = ? AND status = 1', 
+                               (new_status, now_str, parcel_id))
             else:
                 cursor.execute('UPDATE parcels SET status = ? WHERE parcel_id = ?', 
                                (new_status, parcel_id))
@@ -267,7 +270,8 @@ class ParcelRepository:
             set_parts.append("status = ?")
             params.append(status)
             if status == 2:
-                set_parts.append("out_time = CURRENT_TIMESTAMP")
+                set_parts.append("out_time = ?")
+                params.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         if extra_info is not None:
             set_parts.append("extra_info = ?")
             params.append(json.dumps(extra_info))
@@ -287,12 +291,13 @@ class AccessLogRepository:
     def add_log(user_id: int, action_type: str, snapshot_path: str = "",
                 picked_parcels: list = None) -> int:
         parcels_str = json.dumps(picked_parcels or [])
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO access_logs (user_id, action_type, snapshot_path, picked_parcels) 
-                VALUES (?, ?, ?, ?)
-            ''', (user_id, action_type, snapshot_path, parcels_str))
+                INSERT INTO access_logs (user_id, action_type, snapshot_path, picked_parcels, timestamp) 
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, action_type, snapshot_path, parcels_str, now_str))
             conn.commit()
             return cursor.lastrowid
 

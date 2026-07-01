@@ -1,7 +1,7 @@
 import os
 
 # 模型名称
-MODEL_NAME = "buffalo_l"
+MODEL_NAME = "buffalo_s"
 
 # 图像检测的默认输入尺寸 (必须是 32 的整数倍)
 DET_SIZE = (640, 480)
@@ -10,7 +10,7 @@ DET_SIZE = (640, 480)
 SIMILARITY_THRESHOLD = 0.45
 
 # ONNXRuntime 执行提供者配置 (优先使用 GPU)
-PROVIDERS =['CUDAExecutionProvider', 'CPUExecutionProvider']
+PROVIDERS =['CPUExecutionProvider']
 
 # 测试图片路径配置
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
