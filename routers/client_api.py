@@ -3,14 +3,17 @@ from fastapi.responses import StreamingResponse
 import asyncio
 import cv2
 import json
+import logging
 
 from core.state import app_state
 from database.models import UserRepository, ParcelRepository, AccessLogRepository
 from database.schemas import APIResponse, FaceAuthResult, UserOut, ParcelOut
 from services.face_recognition.constants import SIMILARITY_THRESHOLD
+from services.hardware_manager import lock_user_cabinets, open_user_cabinets
 from services.pickup import PickupHandler
 
 router = APIRouter(prefix="/client", tags=["Client Experience"])
+logger = logging.getLogger("SmartStation")
 
 pickup_handler = PickupHandler()
 
@@ -34,8 +37,8 @@ def build_parcel_out(p: dict) -> ParcelOut:
 
 
 @router.post("/access/auth", response_model=APIResponse)
-async def client_auth():
-    """统一入口刷脸认证：后端根据最近一次 access_log 判断进门或出门"""
+async def client_auth(intent: str | None = None):
+    """刷脸认证：可通过 intent 限制本次操作为进门或出门"""
     success, frame = app_state.camera.get_frame()
     if not success or frame is None:
         return APIResponse(code=500, message="摄像头抓图失败")
@@ -64,8 +67,14 @@ async def client_auth():
     )
 
     last_action = AccessLogRepository.get_last_action(user_id, action_types=['IN', 'OUT'])
+    requested_intent = intent.lower() if intent else None
+    if requested_intent not in (None, "entry", "exit"):
+        return APIResponse(code=400, message="无效的刷脸操作类型")
 
     if last_action == "IN":
+        if requested_intent == "entry":
+            return APIResponse(code=409, message="您已在站内，请点击刷脸出门")
+
         # ---- 出门模式 ----
         status = pickup_handler.check_exit_status(user_id)
         result = FaceAuthResult(
@@ -78,6 +87,9 @@ async def client_auth():
         )
         return APIResponse(message="请确认取件情况", data=result)
     else:
+        if requested_intent == "exit":
+            return APIResponse(code=409, message="您当前不在站内，请先刷脸入门")
+
         # ---- 进门模式 ----
         parcels = ParcelRepository.get_active_parcels_by_phone(user["phone"])
         parcel_outs = [build_parcel_out(p) for p in parcels]
@@ -88,6 +100,13 @@ async def client_auth():
             snapshot_path="",
             picked_parcels=[p["tracking_no"] for p in parcels]
         )
+
+        cabinet_numbers = [p["cabinet_number"] for p in parcels if p.get("cabinet_number")]
+        if cabinet_numbers:
+            try:
+                open_user_cabinets(user_id, cabinet_numbers)
+            except Exception:
+                logger.exception("Failed to open cabinets for user %s", user_id)
 
         if hasattr(app_state, "trigger_hardware_alert"):
             await app_state.trigger_hardware_alert(
@@ -130,6 +149,11 @@ async def client_exit_confirm():
         snapshot_path="",
         picked_parcels=[]
     )
+
+    try:
+        lock_user_cabinets(user_id)
+    except Exception:
+        logger.exception("Failed to lock cabinets for user %s", user_id)
 
     if hasattr(app_state, "trigger_hardware_alert"):
         await app_state.trigger_hardware_alert(

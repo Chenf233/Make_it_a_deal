@@ -2,194 +2,765 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SmartStation - 驿站作业端</title>
+    <style>
+        :root {
+            --bg: #07111f;
+            --panel: rgba(15, 23, 42, 0.88);
+            --panel-soft: rgba(30, 41, 59, 0.74);
+            --border: rgba(148, 163, 184, 0.22);
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-strong: #0ea5e9;
+            --danger: #fb7185;
+            --success: #34d399;
+            --warning: #fbbf24;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 14% 18%, rgba(14, 165, 233, 0.2), transparent 28%),
+                radial-gradient(circle at 80% 10%, rgba(52, 211, 153, 0.13), transparent 26%),
+                linear-gradient(135deg, #020617 0%, #0f172a 52%, #07111f 100%);
+            overflow: hidden;
+        }
+
+        .station-shell {
+            width: 100vw;
+            height: 100vh;
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(380px, 0.9fr);
+            gap: 28px;
+            padding: 28px;
+        }
+
+        .camera-panel,
+        .operation-panel {
+            min-height: 0;
+            border: 1px solid var(--border);
+            background: var(--panel);
+            border-radius: 30px;
+            box-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
+            overflow: hidden;
+            backdrop-filter: blur(18px);
+        }
+
+        .camera-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            height: 74px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.66);
+        }
+
+        .header-title {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .eyebrow {
+            font-size: 12px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        h1,
+        h2,
+        p {
+            margin: 0;
+        }
+
+        h1,
+        h2 {
+            font-size: 22px;
+            letter-spacing: 0.02em;
+        }
+
+        .live-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 13px;
+            border-radius: 999px;
+            background: rgba(52, 211, 153, 0.12);
+            color: var(--success);
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 18px var(--success);
+        }
+
+        .camera-frame {
+            position: relative;
+            flex: 1;
+            background: #020617;
+        }
+
+        .camera-frame img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+        }
+
+        .scan-reticle {
+            position: absolute;
+            inset: 16%;
+            border: 2px solid rgba(56, 189, 248, 0.72);
+            border-radius: 28px;
+            box-shadow: 0 0 0 999px rgba(2, 6, 23, 0.18), inset 0 0 36px rgba(56, 189, 248, 0.12);
+            pointer-events: none;
+        }
+
+        .scan-reticle::before,
+        .scan-reticle::after {
+            content: "";
+            position: absolute;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.9;
+        }
+
+        .scan-reticle::before {
+            top: 26%;
+        }
+
+        .scan-reticle::after {
+            bottom: 26%;
+        }
+
+        .operation-panel {
+            padding: 34px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .op-card {
+            width: 100%;
+            padding: 34px;
+            border-radius: 28px;
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.86), rgba(15, 23, 42, 0.76));
+            border: 1px solid var(--border);
+        }
+
+        .op-copy {
+            margin-top: 12px;
+            color: var(--muted);
+            line-height: 1.7;
+            font-size: 15px;
+        }
+
+        .primary-action {
+            width: 100%;
+            height: 78px;
+            margin-top: 34px;
+            border: 0;
+            border-radius: 24px;
+            color: white;
+            cursor: pointer;
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            background: linear-gradient(135deg, var(--accent-strong), #2563eb);
+            box-shadow: 0 18px 38px rgba(14, 165, 233, 0.28);
+            transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+        }
+
+        .primary-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 22px 46px rgba(14, 165, 233, 0.34);
+        }
+
+        .primary-action.scanning {
+            background: linear-gradient(135deg, #f43f5e, #be123c);
+            box-shadow: 0 18px 38px rgba(244, 63, 94, 0.28);
+        }
+
+        .secondary-action {
+            width: 100%;
+            height: 56px;
+            margin-top: 16px;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 18px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 17px;
+            font-weight: 700;
+            background: rgba(15, 23, 42, 0.72);
+            transition: border-color 0.18s ease, background 0.18s ease;
+        }
+
+        .secondary-action:hover {
+            border-color: rgba(56, 189, 248, 0.58);
+            background: rgba(30, 41, 59, 0.9);
+        }
+
+        .secondary-action.inline {
+            height: 42px;
+            margin-top: 18px;
+            font-size: 14px;
+            border-radius: 14px;
+        }
+
+        .status-card {
+            margin-top: 28px;
+            padding: 24px;
+            min-height: 168px;
+            border-radius: 24px;
+            background: rgba(2, 6, 23, 0.34);
+            border: 1px solid var(--border);
+        }
+
+        .status-line {
+            font-size: 18px;
+            line-height: 1.6;
+            color: var(--text);
+        }
+
+        .status-line.success {
+            color: var(--success);
+        }
+
+        .status-line.error {
+            color: var(--danger);
+        }
+
+        .status-line.warning {
+            color: var(--warning);
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 8px;
+            margin-top: 18px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(148, 163, 184, 0.18);
+        }
+
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--accent), var(--success));
+            transition: width 0.2s linear;
+        }
+
+        .result-grid {
+            display: grid;
+            gap: 12px;
+            margin-top: 22px;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .result-row strong {
+            color: var(--text);
+            font-size: 15px;
+            text-align: right;
+        }
+
+        .adjust-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 28px;
+            background: rgba(2, 6, 23, 0.72);
+            backdrop-filter: blur(12px);
+        }
+
+        .adjust-overlay.show {
+            display: flex;
+        }
+
+        .adjust-dialog {
+            width: min(760px, calc(100vw - 36px));
+            max-height: calc(100vh - 56px);
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.96));
+            box-shadow: 0 30px 100px rgba(0, 0, 0, 0.55);
+        }
+
+        .adjust-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 26px 28px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .adjust-close {
+            width: 42px;
+            height: 42px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 22px;
+            background: rgba(30, 41, 59, 0.72);
+        }
+
+        .adjust-body {
+            display: grid;
+            gap: 18px;
+            padding: 24px 28px 28px;
+        }
+
+        .adjust-section {
+            padding: 20px;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            background: rgba(15, 23, 42, 0.66);
+        }
+
+        .adjust-section h3 {
+            margin: 0 0 14px;
+            font-size: 17px;
+        }
+
+        .adjust-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .adjust-btn {
+            min-height: 48px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 16px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 700;
+            background: rgba(30, 41, 59, 0.74);
+        }
+
+        .adjust-btn:active {
+            transform: translateY(1px);
+            border-color: var(--accent);
+        }
+
+        .adjust-btn.danger {
+            color: #fecdd3;
+            background: rgba(127, 29, 29, 0.52);
+        }
+
+        #adjustStatus {
+            color: var(--muted);
+            line-height: 1.6;
+            min-height: 24px;
+        }
+
+        @media (max-width: 860px) {
+            body {
+                overflow: auto;
+            }
+
+            .station-shell {
+                height: auto;
+                min-height: 100vh;
+                grid-template-columns: 1fr;
+                padding: 18px;
+            }
+
+            .camera-panel {
+                min-height: 48vh;
+            }
+
+            .operation-panel {
+                padding: 22px;
+            }
+
+            .op-card {
+                padding: 26px;
+            }
+
+            .adjust-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>驿站作业端 (Station)</h1>
-    <button onclick="mockScanIn()">模拟触发入库 (/api/station/scan_in)</button>
-    <p>监控视频流占位区：</p>
-    <!-- <img src="/api/station/video_feed" width="640" height="480" style="border: 1px solid black;" /> -->
+    <main class="station-shell">
+        <section class="camera-panel">
+            <div class="panel-header">
+                <div class="header-title">
+                    <span class="eyebrow">Station Camera</span>
+                    <h1>入库扫码视野</h1>
+                </div>
+                <div class="live-pill"><span class="live-dot"></span>LIVE</div>
+            </div>
+            <div class="camera-frame">
+                <img src="/api/station/video_feed" alt="驿站摄像头实时画面">
+                <div class="scan-reticle"></div>
+            </div>
+        </section>
 
-    <hr>
-    <h2>电机1控制</h2>
-    <button onclick="motorControl('left')">下降半圈</button>
-<button id="motorLeftBtn" onmousedown="pressStart(1,'left')" onmouseup="pressEnd(1,'left')" onmouseleave="pressEnd(1,'left')" ontouchstart="pressStart(1,'left')" ontouchend="pressEnd(1,'left')">下降按住连续转</button>
-    <button onclick="motorControl('right')">上升半圈</button>
-<button onmousedown="pressStart(1,'right')" onmouseup="pressEnd(1,'right')" onmouseleave="pressEnd(1,'right')" ontouchstart="pressStart(1,'right')" ontouchend="pressEnd(1,'right')">上升按住连续转</button>
-    <p id="motorStatus"></p>
+        <section class="operation-panel">
+            <div class="op-card">
+                <span class="eyebrow">Inbound Workflow</span>
+                <h2>包裹扫码入库</h2>
+                <p class="op-copy">点击后系统会在不少于 10 秒的扫码窗口内识别二维码，成功后自动分配货柜并执行机械臂入库。扫描阶段可取消。</p>
 
-    <hr>
-    <h2>电机2控制</h2>
-    <button onclick="motorControl2('left')">左旋半圈</button>
-<button onmousedown="pressStart(2,'left')" onmouseup="pressEnd(2,'left')" onmouseleave="pressEnd(2,'left')" ontouchstart="pressStart(2,'left')" ontouchend="pressEnd(2,'left')">左旋按住连续转</button>
-    <button onclick="motorControl2('right')">右旋半圈</button>
-<button onmousedown="pressStart(2,'right')" onmouseup="pressEnd(2,'right')" onmouseleave="pressEnd(2,'right')" ontouchstart="pressStart(2,'right')" ontouchend="pressEnd(2,'right')">右旋按住连续转</button>
-    <p id="motorStatus2"></p>
-    <!-- <img src="/api/station/video_feed" width="640" height="480" style="border: 1px solid black;" /> -->
+                <button id="scanInBtn" class="primary-action" type="button">扫码入库</button>
+                <button id="adjustModeBtn" class="secondary-action" type="button">调节模式</button>
 
-    <hr>
-    <h2>蜂鸣器控制</h2>
-    <button onclick="buzzerStart(1)">蜂鸣器1 启动</button>
-    <button onclick="buzzerStop(1)">蜂鸣器1 停止</button>
-    <button onclick="buzzerStart(2)">蜂鸣器2 启动</button>
-    <button onclick="buzzerStop(2)">蜂鸣器2 停止</button>
-    <p id="buzzerStatus"></p>
+                <div class="status-card">
+                    <p id="scanStatus" class="status-line">等待扫码入库任务。</p>
+                    <div class="progress-track">
+                        <div id="scanProgress" class="progress-fill"></div>
+                    </div>
+                    <div id="resultGrid" class="result-grid" hidden></div>
+                    <button id="clearPreviewBtn" class="secondary-action inline" type="button" hidden>取消本次预分配</button>
+                </div>
+            </div>
+        </section>
+    </main>
 
-    <hr>
-    <h2>电机3控制（直流电机，5秒）</h2>
-    <button onclick="motor3Control('ccw')">逆时针旋转5秒</button>
-    <button onclick="motor3Control('cw')">顺时针旋转5秒</button>
-    <p id="motorStatus3"></p>
+    <div id="adjustOverlay" class="adjust-overlay" aria-hidden="true">
+        <div class="adjust-dialog" role="dialog" aria-modal="true" aria-labelledby="adjustTitle">
+            <div class="adjust-header">
+                <div>
+                    <span class="eyebrow">Manual Recovery</span>
+                    <h2 id="adjustTitle">机械臂调节模式</h2>
+                </div>
+                <button id="adjustCloseBtn" class="adjust-close" type="button" aria-label="关闭调节模式">×</button>
+            </div>
+            <div class="adjust-body">
+                <p id="adjustStatus">用于断电、卡位后的人工复位。按住连续按钮会在松开时发送停止指令。</p>
 
-    <hr>
-    <h2>快捷操作</h2>
-    <button onclick="moveToA02()">快捷操作：电机2左旋20圈→电机3顺时针10s→电机2右旋20圈</button>
-    <p id="moveStatus"></p>
+                <section class="adjust-section">
+                    <h3>电机1：上下复位</h3>
+                    <div class="adjust-grid">
+                        <button class="adjust-btn" type="button" data-post="/api/station/motor/left">下降半圈</button>
+                        <button class="adjust-btn" type="button" data-post="/api/station/motor/right">上升半圈</button>
+                        <button class="adjust-btn danger" type="button" data-hold-start="/api/station/motor/left/start" data-hold-stop="/api/station/motor/left/stop">按住下降</button>
+                        <button class="adjust-btn danger" type="button" data-hold-start="/api/station/motor/right/start" data-hold-stop="/api/station/motor/right/stop">按住上升</button>
+                    </div>
+                </section>
+
+                <section class="adjust-section">
+                    <h3>电机2：左右复位</h3>
+                    <div class="adjust-grid">
+                        <button class="adjust-btn" type="button" data-post="/api/station/motor2/left">左旋半圈</button>
+                        <button class="adjust-btn" type="button" data-post="/api/station/motor2/right">右旋半圈</button>
+                        <button class="adjust-btn danger" type="button" data-hold-start="/api/station/motor2/left/start" data-hold-stop="/api/station/motor2/left/stop">按住左旋</button>
+                        <button class="adjust-btn danger" type="button" data-hold-start="/api/station/motor2/right/start" data-hold-stop="/api/station/motor2/right/stop">按住右旋</button>
+                    </div>
+                </section>
+
+                <section class="adjust-section">
+                    <h3>电机3：投递方向复位</h3>
+                    <div class="adjust-grid">
+                        <button class="adjust-btn" type="button" data-post="/api/station/motor3/cw">顺时针 5 秒</button>
+                        <button class="adjust-btn" type="button" data-post="/api/station/motor3/ccw">逆时针 5 秒</button>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
 
     <script>
-        const ws = new WebSocket(`ws://${window.location.host}/ws/station`);
-        ws.onopen = () => console.log("✅ 驿站端 WebSocket 已连接");
-        ws.onmessage = (event) => {
-            console.log("📥 收到驿站端消息:", event.data);
-        };
+        const SCAN_SECONDS = 10;
+        const btn = document.getElementById("scanInBtn");
+        const adjustModeBtn = document.getElementById("adjustModeBtn");
+        const adjustOverlay = document.getElementById("adjustOverlay");
+        const adjustCloseBtn = document.getElementById("adjustCloseBtn");
+        const adjustStatus = document.getElementById("adjustStatus");
+        const statusEl = document.getElementById("scanStatus");
+        const progressEl = document.getElementById("scanProgress");
+        const resultGrid = document.getElementById("resultGrid");
+        const clearPreviewBtn = document.getElementById("clearPreviewBtn");
 
-        function mockScanIn() {
-            fetch("/api/station/scan_in", { method: "POST" })
-                .then(res => res.json())
-                .then(data => alert(JSON.stringify(data)))
-                .catch(err => console.error(err));
-        }
-        function motorControl(direction) {
-            const status = document.getElementById("motorStatus");
-            status.textContent = direction === "left" ? "⏳ 下降中..." : "⏳ 上升中...";
-            fetch("/api/station/motor/" + direction, { method: "POST" })
-                .then(res => res.json())
-                .then(data => status.textContent = data.message)
-                .catch(err => {
-                    status.textContent = "❌ 电机失败";
-                    console.error(err);
-                });
+        let scanController = null;
+        let progressTimer = null;
+        let scanStartedAt = 0;
+        let inboundState = "idle";
+        let pendingPreview = null;
+
+        btn.addEventListener("click", () => {
+            if (scanController) {
+                cancelScan();
+                return;
+            }
+            if (inboundState === "preview") {
+                confirmInbound();
+                return;
+            }
+            if (inboundState === "confirming") return;
+            startScan();
+        });
+
+        clearPreviewBtn.addEventListener("click", resetInboundPreview);
+
+        adjustModeBtn.addEventListener("click", openAdjustMode);
+        adjustCloseBtn.addEventListener("click", closeAdjustMode);
+        adjustOverlay.addEventListener("click", (event) => {
+            if (event.target === adjustOverlay) closeAdjustMode();
+        });
+        window.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") closeAdjustMode();
+        });
+
+        document.querySelectorAll("[data-post]").forEach(button => {
+            button.addEventListener("click", () => runAdjustCommand(button.dataset.post, button.textContent.trim()));
+        });
+
+        document.querySelectorAll("[data-hold-start]").forEach(button => {
+            button.addEventListener("mousedown", () => startHoldCommand(button));
+            button.addEventListener("mouseup", () => stopHoldCommand(button));
+            button.addEventListener("mouseleave", () => stopHoldCommand(button));
+            button.addEventListener("touchstart", (event) => {
+                event.preventDefault();
+                startHoldCommand(button);
+            }, { passive: false });
+            button.addEventListener("touchend", () => stopHoldCommand(button));
+            button.addEventListener("touchcancel", () => stopHoldCommand(button));
+        });
+
+        function setStatus(text, type = "") {
+            statusEl.textContent = text;
+            statusEl.className = "status-line" + (type ? " " + type : "");
         }
 
-        function motorControl2(direction) {
-            const status = document.getElementById("motorStatus2");
-            status.textContent = direction === "left" ? "⏳ 左旋中..." : "⏳ 右旋中...";
-            fetch("/api/station/motor2/" + direction, { method: "POST" })
-                .then(res => res.json())
-                .then(data => status.textContent = data.message)
-                .catch(err => {
-                    status.textContent = "❌ 电机2失败";
-                    console.error(err);
-                });
+        function setResult(parcel) {
+            if (!parcel) {
+                resultGrid.hidden = true;
+                resultGrid.innerHTML = "";
+                clearPreviewBtn.hidden = true;
+                return;
+            }
+
+            resultGrid.hidden = false;
+            clearPreviewBtn.hidden = inboundState !== "preview";
+            resultGrid.innerHTML = `
+                <div class="result-row"><span>快递单号</span><strong>${parcel.tracking_no || "--"}</strong></div>
+                <div class="result-row"><span>快递公司</span><strong>${parcel.company || "--"}</strong></div>
+                <div class="result-row"><span>收件人</span><strong>${parcel.receiver_name || "--"}</strong></div>
+                <div class="result-row"><span>手机号</span><strong>${parcel.receiver_phone || "--"}</strong></div>
+                <div class="result-row"><span>${inboundState === "preview" ? "预分配货柜" : "入库货柜"}</span><strong>${parcel.cabinet_number || "--"}</strong></div>
+            `;
         }
-        function motor3Control(direction) {
-            const status = document.getElementById("motorStatus3");
-            const label = direction === "cw" ? "顺时针" : "逆时针";
-            status.textContent = "⏳ " + label + "旋转5秒中...";
-            fetch("/api/station/motor3/" + direction, { method: "POST" })
-                .then(res => res.json())
-                .then(data => status.textContent = data.message)
-                .catch(err => {
-                    status.textContent = "❌ 电机3失败";
-                    console.error(err);
-                });
+
+        function startProgress() {
+            scanStartedAt = Date.now();
+            progressEl.style.width = "0%";
+            clearInterval(progressTimer);
+            progressTimer = setInterval(() => {
+                const elapsed = (Date.now() - scanStartedAt) / 1000;
+                const pct = Math.min(100, (elapsed / SCAN_SECONDS) * 100);
+                progressEl.style.width = pct + "%";
+            }, 100);
         }
-        function buzzerStart(num) {
-            const status = document.getElementById("buzzerStatus");
-            status.textContent = "🔊 蜂鸣器" + num + " 启动中...";
-            fetch("/api/station/buzzer/" + num + "/start", { method: "POST" })
-                .then(res => res.json())
-                .then(data => status.textContent = data.message)
-                .catch(err => {
-                    status.textContent = "❌ 蜂鸣器" + num + " 启动失败";
-                    console.error(err);
-                });
+
+        function stopProgress(fill = false) {
+            clearInterval(progressTimer);
+            progressTimer = null;
+            progressEl.style.width = fill ? "100%" : "0%";
         }
-        function buzzerStop(num) {
-            const status = document.getElementById("buzzerStatus");
-            status.textContent = "🔇 蜂鸣器" + num + " 停止中...";
-            fetch("/api/station/buzzer/" + num + "/stop", { method: "POST" })
-                .then(res => res.json())
-                .then(data => status.textContent = data.message)
-                .catch(err => {
-                    status.textContent = "❌ 蜂鸣器" + num + " 停止失败";
-                    console.error(err);
-                });
-        }
-        function moveToA02() {
-            const status = document.getElementById("moveStatus");
-            status.textContent = "⏳ 正在执行快捷操作...";
-            fetch("/api/station/move_to_a02", { method: "POST" })
+
+        function startScan() {
+            inboundState = "scanning";
+            scanController = new AbortController();
+            btn.textContent = "取消扫码";
+            btn.classList.add("scanning");
+            btn.disabled = false;
+            pendingPreview = null;
+            setResult(null);
+            setStatus("正在扫描二维码，最长等待 10 秒...", "warning");
+            startProgress();
+
+            fetch("/api/station/scan_in/preview", {
+                method: "POST",
+                signal: scanController.signal
+            })
                 .then(res => res.json())
                 .then(data => {
                     if (data.code === 200) {
-                        status.textContent = "✅ " + data.message;
+                        inboundState = "preview";
+                        pendingPreview = data.data;
+                        setStatus(data.message || "扫码成功，请确认入库", "success");
+                        btn.textContent = "确认入库";
+                        btn.classList.remove("scanning");
+                        btn.disabled = false;
+                        setResult(pendingPreview);
+                        stopProgress(true);
                     } else {
-                        status.textContent = "❌ " + data.message;
+                        inboundState = "idle";
+                        setStatus(data.message || "入库失败", data.code === 499 ? "warning" : "error");
+                        setResult(null);
+                        btn.textContent = "扫码入库";
+                        btn.classList.remove("scanning");
+                        stopProgress(false);
                     }
                 })
                 .catch(err => {
-                    status.textContent = "❌ 移库失败";
+                    inboundState = "idle";
+                    if (err.name === "AbortError") {
+                        setStatus("已取消扫码。", "warning");
+                    } else {
+                        setStatus("入库请求失败，请检查服务连接。", "error");
+                        console.error(err);
+                    }
+                    setResult(null);
+                    btn.textContent = "扫码入库";
+                    btn.classList.remove("scanning");
+                    stopProgress(false);
+                })
+                .finally(() => {
+                    scanController = null;
+                });
+        }
+
+        function cancelScan() {
+            if (!scanController) return;
+            scanController.abort();
+        }
+
+        function resetInboundPreview() {
+            inboundState = "idle";
+            pendingPreview = null;
+            btn.disabled = false;
+            btn.textContent = "扫码入库";
+            btn.classList.remove("scanning");
+            setResult(null);
+            stopProgress(false);
+            setStatus("已取消本次预分配，可重新扫码。", "warning");
+        }
+
+        function confirmInbound() {
+            if (!pendingPreview || !pendingPreview.token) {
+                resetInboundPreview();
+                setStatus("预分配信息已失效，请重新扫码。", "error");
+                return;
+            }
+
+            inboundState = "confirming";
+            btn.disabled = true;
+            btn.textContent = "入库中...";
+            clearPreviewBtn.hidden = true;
+            setStatus("正在执行机械臂入库，请勿断电或移动包裹...", "warning");
+
+            fetch("/api/station/scan_in/confirm", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token: pendingPreview.token })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 200) {
+                        inboundState = "idle";
+                        pendingPreview = null;
+                        setStatus(data.message || "入库成功", "success");
+                        setResult(data.data);
+                        stopProgress(true);
+                    } else {
+                        inboundState = "preview";
+                        setStatus(data.message || "入库失败", "error");
+                        setResult(pendingPreview);
+                    }
+                })
+                .catch(err => {
+                    inboundState = "preview";
+                    setStatus("确认入库请求失败，请检查服务连接。", "error");
+                    setResult(pendingPreview);
+                    console.error(err);
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    if (inboundState === "preview") {
+                        btn.textContent = "确认入库";
+                    } else {
+                        btn.textContent = "扫码入库";
+                    }
+                });
+        }
+
+        function openAdjustMode() {
+            adjustOverlay.classList.add("show");
+            adjustOverlay.setAttribute("aria-hidden", "false");
+        }
+
+        function closeAdjustMode() {
+            adjustOverlay.classList.remove("show");
+            adjustOverlay.setAttribute("aria-hidden", "true");
+        }
+
+        function setAdjustStatus(text, type = "") {
+            adjustStatus.textContent = text;
+            adjustStatus.style.color = type === "error" ? "var(--danger)" : type === "success" ? "var(--success)" : "var(--muted)";
+        }
+
+        function runAdjustCommand(url, label) {
+            setAdjustStatus(label + " 执行中...");
+            return fetch(url, { method: "POST" })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.code === 200 || data.code === undefined) {
+                        setAdjustStatus(data.message || label + " 已完成", "success");
+                    } else {
+                        setAdjustStatus(data.message || label + " 失败", "error");
+                    }
+                })
+                .catch(err => {
+                    setAdjustStatus(label + " 请求失败", "error");
                     console.error(err);
                 });
         }
-    
-const pressState = {};
 
-function pressStart(motor, direction) {
-    const key = motor + '_' + direction;
-    const existing = pressState[key];
-    if (existing && (existing.timer || existing.running)) return;
+        function startHoldCommand(button) {
+            if (button.dataset.running === "1") return;
+            button.dataset.running = "1";
+            runAdjustCommand(button.dataset.holdStart, button.textContent.trim() + "启动");
+        }
 
-    const state = { timer: null, running: false };
-    pressState[key] = state;
-
-    state.timer = setTimeout(() => {
-        state.timer = null;
-        state.running = true;
-        const prefix = motor === 1 ? '' : '2';
-        const statusEl = document.getElementById(motor === 1 ? 'motorStatus' : 'motorStatus2');
-        const dirLabel = motor === 1
-            ? (direction === 'left' ? '下降' : '上升')
-            : (direction === 'left' ? '左旋' : '右旋');
-        statusEl.textContent = '电机' + motor + '开始' + dirLabel + '连续...';
-        fetch('/api/station/motor' + prefix + '/' + direction + '/start', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => statusEl.textContent = data.message)
-            .catch(err => {
-                statusEl.textContent = '电机启动失败';
-                console.error(err);
-            });
-    }, 500);
-}
-
-function pressEnd(motor, direction) {
-    const key = motor + '_' + direction;
-    const state = pressState[key];
-    if (!state) return;
-
-    if (state.timer) {
-        clearTimeout(state.timer);
-        delete pressState[key];
-        return;
-    }
-
-    if (state.running) {
-        state.running = false;
-        const prefix = motor === 1 ? '' : '2';
-        const statusEl = document.getElementById(motor === 1 ? 'motorStatus' : 'motorStatus2');
-        statusEl.textContent = '电机' + motor + '停止中...';
-        fetch('/api/station/motor' + prefix + '/' + direction + '/stop', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => statusEl.textContent = data.message)
-            .catch(err => {
-                statusEl.textContent = '电机停止失败';
-                console.error(err);
-            });
-    }
-    delete pressState[key];
-}
-
-</script>
+        function stopHoldCommand(button) {
+            if (button.dataset.running !== "1") return;
+            button.dataset.running = "0";
+            runAdjustCommand(button.dataset.holdStop, button.textContent.trim() + "停止");
+        }
+    </script>
 </body>
 </html>

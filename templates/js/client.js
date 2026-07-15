@@ -16,13 +16,17 @@
     const $popupFooter = $('#popup-footer');
     const $notification = $('#notification');
     const $btnAuth     = $('#btn-auth');
-    const $btnPickup   = $('#btn-pickup');
+    const $btnExit     = $('#btn-exit');
 
     /* ============ 常量 ============ */
     let notifTimer = null;
     const NOTIF_DURATION = 3500;
     let popupDismissTimer = null;
     const POPUP_AUTO_DISMISS = 8000;
+    var pickupRetryTimer = null;
+    var MAX_PICKUP_RETRIES = 30;
+    var exitScanCancelFlag = false;
+    var currentExitData = null;
 
     /* ============ 通知系统 ============ */
     function showNotification(msg, type) {
@@ -58,7 +62,11 @@
 
     function dismissPopup() {
         if (popupDismissTimer) clearTimeout(popupDismissTimer);
+        if (pickupRetryTimer) clearTimeout(pickupRetryTimer);
         popupDismissTimer = null;
+        pickupRetryTimer = null;
+        exitScanCancelFlag = true;
+        currentExitData = null;
         $authPopup.style.display = 'none';
         $idlePanel.style.display = 'flex';
     }
@@ -87,11 +95,11 @@
         }).join('') + '</div>';
     }
 
-    /* ============ 刷脸认证（入口/出口统一） ============ */
-    async function handleAuth() {
-        setBtnLoading($btnAuth, true);
+    /* ============ 刷脸认证 ============ */
+    async function handleAuth(intent, btn) {
+        setBtnLoading(btn, true);
         try {
-            var resp = await fetch('/api/client/access/auth', { method: 'POST' });
+            var resp = await fetch('/api/client/access/auth?intent=' + encodeURIComponent(intent), { method: 'POST' });
             var json = await resp.json();
 
             if (!resp.ok || json.code !== 200 || !json.data) {
@@ -108,7 +116,7 @@
         } catch (e) {
             showNotification('网络异常：' + e.message, 'error');
         } finally {
-            setBtnLoading($btnAuth, false);
+            setBtnLoading(btn, false);
         }
     }
 
@@ -125,6 +133,15 @@
     }
 
     function showExitPopup(data) {
+        currentExitData = data;
+        renderExitPopup();
+        showPopup();
+    }
+
+    function renderExitPopup() {
+        var data = currentExitData;
+        if (!data) return;
+
         var user = data.user;
         var expected = data.exit_expected_total || 0;
         var picked = data.exit_picked_count || 0;
@@ -148,14 +165,125 @@
 
         $popupBody.innerHTML = bodyHtml;
         $popupFooter.innerHTML = '<div class="popup-actions">' +
-            '<button id="btn-exit-confirm" class="btn btn-primary">确认离开</button>' +
+            '<button id="btn-exit-scan" class="btn btn-primary">扫码出库</button>' +
+            '<button id="btn-exit-confirm" class="btn btn-outline">确认离开</button>' +
             '<button id="btn-exit-back" class="btn btn-outline">我再看看</button>' +
             '</div>';
 
-        showPopup();
-
+        $('#btn-exit-scan').addEventListener('click', handleExitScan);
         $('#btn-exit-confirm').addEventListener('click', handleExitConfirm);
         $('#btn-exit-back').addEventListener('click', dismissPopup);
+    }
+
+    function handleExitScan() {
+        var btn = $('#btn-exit-scan');
+        if (!btn) return;
+        if (btn.classList.contains('cancelling')) {
+            cancelExitScan(true);
+            return;
+        }
+
+        if (pickupRetryTimer) clearTimeout(pickupRetryTimer);
+        pickupRetryTimer = null;
+        exitScanCancelFlag = false;
+        btn.textContent = '取消出库';
+        btn.classList.add('cancelling');
+        showNotification('正在人脸验证并扫描包裹二维码...', 'warning');
+        doExitScan(0, btn);
+    }
+
+    function resetExitScanButton(btn) {
+        btn = btn || $('#btn-exit-scan');
+        if (!btn) return;
+        btn.disabled = false;
+        btn.classList.remove('btn-loading');
+        btn.classList.remove('cancelling');
+        btn.textContent = '扫码出库';
+        if (btn.dataset.originalText) delete btn.dataset.originalText;
+    }
+
+    function cancelExitScan(showMsg) {
+        exitScanCancelFlag = true;
+        if (pickupRetryTimer) clearTimeout(pickupRetryTimer);
+        pickupRetryTimer = null;
+        resetExitScanButton();
+        if (showMsg) {
+            showNotification('已取消扫码出库', 'warning');
+        }
+    }
+
+    function applyPickupToExitData(parcel) {
+        if (!currentExitData || !parcel || !parcel.tracking_no) return;
+
+        var removed = false;
+        var active = currentExitData.active_parcels || [];
+        currentExitData.active_parcels = active.filter(function(p) {
+            if (p.tracking_no === parcel.tracking_no) {
+                removed = true;
+                return false;
+            }
+            return true;
+        });
+
+        if (removed) {
+            currentExitData.exit_picked_count = (currentExitData.exit_picked_count || 0) + 1;
+        }
+    }
+
+    async function doExitScan(retryCount, btn) {
+        if (exitScanCancelFlag) return;
+
+        try {
+            var resp = await fetch('/api/client/confirm_pickup', { method: 'POST' });
+            var json = await resp.json();
+
+            if (exitScanCancelFlag) return;
+
+            if (!resp.ok || json.code !== 200 || !json.data) {
+                var msg = json.message || '';
+
+                if (msg.indexOf('未检测到人脸') !== -1) {
+                    if (retryCount < MAX_PICKUP_RETRIES) {
+                        showNotification('未检测到人脸，请正对摄像头... (' + (retryCount + 1) + '/' + MAX_PICKUP_RETRIES + ')', 'warning');
+                        pickupRetryTimer = setTimeout(function() { doExitScan(retryCount + 1, btn); }, 1500);
+                        return;
+                    }
+                    showNotification('身份验证超时，请正对摄像头后重试', 'error');
+                    resetExitScanButton(btn);
+                    return;
+                }
+
+                if (msg.indexOf('未检测到包裹') !== -1 || msg.indexOf('二维码') !== -1) {
+                    if (retryCount < MAX_PICKUP_RETRIES) {
+                        if (retryCount === 0) {
+                            showNotification('人脸验证通过，即将扫描二维码', 'warning');
+                        } else {
+                            showNotification('请将包裹二维码对准摄像头... (' + (retryCount + 1) + '/' + MAX_PICKUP_RETRIES + ')', 'warning');
+                        }
+                        pickupRetryTimer = setTimeout(function() { doExitScan(retryCount + 1, btn); }, 1500);
+                        return;
+                    }
+                    showNotification('扫描超时，请确认二维码在画面中后重试', 'error');
+                    resetExitScanButton(btn);
+                    return;
+                }
+
+                showNotification(msg || '扫码出库失败', 'error');
+                resetExitScanButton(btn);
+                return;
+            }
+
+            var parcel = json.data;
+            pickupRetryTimer = null;
+            exitScanCancelFlag = false;
+            applyPickupToExitData(parcel);
+            renderExitPopup();
+            showNotification('出库成功：' + parcel.tracking_no + '  柜号：' + parcel.cabinet_number, 'success');
+        } catch (e) {
+            if (exitScanCancelFlag) return;
+            showNotification('网络异常：' + e.message, 'error');
+            resetExitScanButton(btn);
+        }
     }
 
     async function handleExitConfirm() {
@@ -177,77 +305,6 @@
             showNotification('网络异常：' + e.message, 'error');
         } finally {
             setBtnLoading(btn, false);
-        }
-    }
-
-    /* ============ 取件确认 ============ */
-    var pickupCancelFlag = false;
-    var pickupRetryTimer = null;
-    var MAX_PICKUP_RETRIES = 30;
-
-    function cancelPickup() {
-        pickupCancelFlag = true;
-        if (pickupRetryTimer) clearTimeout(pickupRetryTimer);
-        pickupRetryTimer = null;
-        $btnPickup.textContent = '扫码取件';
-        $btnPickup.classList.remove('cancelling');
-    }
-
-    function startPickup() {
-        pickupCancelFlag = false;
-        $btnPickup.textContent = '取消取件';
-        $btnPickup.classList.add('cancelling');
-        showNotification('正在人脸验证，请正对摄像头...', 'warning');
-        doPickup(0);
-    }
-
-    async function doPickup(retryCount) {
-        if (pickupCancelFlag) return;
-
-        try {
-            var resp = await fetch('/api/client/confirm_pickup', { method: 'POST' });
-            var json = await resp.json();
-
-            if (!resp.ok || json.code !== 200 || !json.data) {
-                var msg = json.message || '';
-
-                if (msg.indexOf('未检测到人脸') !== -1) {
-                    if (retryCount < MAX_PICKUP_RETRIES) {
-                        showNotification('未检测到人脸，请正对摄像头... (' + (retryCount + 1) + '/' + MAX_PICKUP_RETRIES + ')', 'warning');
-                        pickupRetryTimer = setTimeout(function() { doPickup(retryCount + 1); }, 1500);
-                        return;
-                    }
-                    showNotification('身份验证超时，请正对摄像头后重试', 'error');
-                    cancelPickup();
-                    return;
-                }
-
-                if (msg.indexOf('未检测到包裹') !== -1 || msg.indexOf('二维码') !== -1) {
-                    if (retryCount < MAX_PICKUP_RETRIES) {
-                        if (retryCount === 0) {
-                            showNotification('人脸验证通过，即将扫描二维码', 'warning');
-                        } else {
-                            showNotification('请将包裹二维码对准摄像头... (' + (retryCount + 1) + '/' + MAX_PICKUP_RETRIES + ')', 'warning');
-                        }
-                        pickupRetryTimer = setTimeout(function() { doPickup(retryCount + 1); }, 1500);
-                        return;
-                    }
-                    showNotification('扫描超时，请确认二维码在画面中后重试', 'error');
-                    cancelPickup();
-                    return;
-                }
-
-                showNotification(msg, 'error');
-                cancelPickup();
-                return;
-            }
-
-            var parcel = json.data;
-            showNotification('取件成功：' + parcel.tracking_no + '  柜号：' + parcel.cabinet_number, 'success');
-            cancelPickup();
-        } catch (e) {
-            showNotification('网络异常：' + e.message, 'error');
-            cancelPickup();
         }
     }
 
@@ -306,15 +363,8 @@
     }
 
     /* ============ 事件绑定 ============ */
-    $btnAuth.addEventListener('click', handleAuth);
-
-    $btnPickup.addEventListener('click', function() {
-        if ($btnPickup.classList.contains('cancelling')) {
-            cancelPickup();
-        } else {
-            startPickup();
-        }
-    });
+    $btnExit.addEventListener('click', function() { handleAuth('exit', $btnExit); });
+    $btnAuth.addEventListener('click', function() { handleAuth('entry', $btnAuth); });
 
     $authPopup.addEventListener('click', function(e) {
         if (e.target === $authPopup) dismissPopup();

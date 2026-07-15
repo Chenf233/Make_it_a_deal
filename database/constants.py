@@ -10,9 +10,9 @@ os.makedirs(DB_DIR, exist_ok=True)
 
 # ================= 货柜号范围配置 =================
 # 货柜号生成规则：前缀 + 两位数字，例如 A01, B12
-CABINET_PREFIXES = ["A", "B", "C", "D"]
+CABINET_PREFIXES = ["A", "B"]
 CABINET_NUM_MIN = 1
-CABINET_NUM_MAX = 20
+CABINET_NUM_MAX = 2
 # 可用柜号总数上限
 CABINET_MAX_CAPACITY = len(CABINET_PREFIXES) * (CABINET_NUM_MAX - CABINET_NUM_MIN + 1)
 

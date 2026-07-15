@@ -69,13 +69,18 @@ def _loop(pin, stop_flag):
     _green_on(pin)
     while not stop_flag.is_set():
         GPIO.output(pin, GPIO.HIGH)
-        time.sleep(1)
+        if stop_flag.wait(1):
+            break
         GPIO.output(pin, GPIO.LOW)
-        time.sleep(0.5)
+        if stop_flag.wait(0.5):
+            break
         GPIO.output(pin, GPIO.HIGH)
-        time.sleep(0.5)
+        if stop_flag.wait(0.5):
+            break
         GPIO.output(pin, GPIO.LOW)
-        time.sleep(1)
+        if stop_flag.wait(1):
+            break
+    GPIO.output(pin, GPIO.LOW)
     _blue_on(pin)
 
 

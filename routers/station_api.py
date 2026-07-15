@@ -1,8 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 import asyncio
 import cv2
 import logging
+import time
+import uuid
 
 from core.state import app_state
 from database.models import ParcelRepository
@@ -14,21 +16,98 @@ from services.scanner.constants import DEMO_DATA_LIST
 logger = logging.getLogger("SmartStation")
 router = APIRouter(prefix="/station", tags=["Station Operations"])
 
+STATION_INBOUND_LOCK = asyncio.Lock()
+SCAN_IN_WINDOW_SECONDS = 10
+SCAN_IN_INTERVAL_SECONDS = 0.2
+PENDING_INBOUND_TTL_SECONDS = 120
+PENDING_INBOUND_TASKS = {}
 
-@router.post("/scan_in", response_model=APIResponse)
-async def scan_and_store():
-    success, frame = app_state.camera.get_frame()
-    if not success or frame is None:
-        return APIResponse(code=500, message="摄像头抓图失败")
+# 机械臂初始位置按 A01/B01 对齐。调参时只需要改这里。
+# motor2_right_turns: 从左到右移动；motor1_down_turns: 从上到下移动。
+# A/B 两面目前只通过 motor3_direction 区分投递方向。
+CABINET_MOVE_PARAMS = {
+    "A01": {"motor2_right_turns": 0, "motor1_down_turns": 0, "motor3_direction": "cw", "motor3_seconds": 10},
+    "A02": {"motor2_right_turns": 20, "motor1_down_turns": 0, "motor3_direction": "cw", "motor3_seconds": 10},
+    "A03": {"motor2_right_turns": 0, "motor1_down_turns": 13, "motor3_direction": "cw", "motor3_seconds": 10},
+    "A04": {"motor2_right_turns": 20, "motor1_down_turns": 13, "motor3_direction": "cw", "motor3_seconds": 10},
+    "B01": {"motor2_right_turns": 0, "motor1_down_turns": 0, "motor3_direction": "ccw", "motor3_seconds": 10},
+    "B02": {"motor2_right_turns": 20, "motor1_down_turns": 0, "motor3_direction": "ccw", "motor3_seconds": 10},
+    "B03": {"motor2_right_turns": 0, "motor1_down_turns": 13, "motor3_direction": "ccw", "motor3_seconds": 10},
+    "B04": {"motor2_right_turns": 20, "motor1_down_turns": 13, "motor3_direction": "ccw", "motor3_seconds": 10},
+}
 
-    if not app_state.scanner:
-        return APIResponse(code=500, message="扫描器未就绪")
-    annotated_frame, qr_data_list = app_state.scanner.scan(frame)
 
-    if not qr_data_list:
-        return APIResponse(code=400, message="未检测到有效条码/二维码")
+async def move_parcel_to_cabinet(cabinet_number: str):
+    params = CABINET_MOVE_PARAMS.get(cabinet_number)
+    if not params:
+        raise RuntimeError(f"柜号 {cabinet_number} 暂未配置机械臂路径")
 
-    qr_data = qr_data_list[0]
+    loop = asyncio.get_event_loop()
+    motor2_right_turns = params["motor2_right_turns"]
+    motor1_down_turns = params["motor1_down_turns"]
+
+    if motor2_right_turns:
+        await loop.run_in_executor(None, rotate_turns, 2, 0, motor2_right_turns)
+    if motor1_down_turns:
+        await loop.run_in_executor(None, rotate_turns, 1, 0, motor1_down_turns)
+
+    motor3_direction = params["motor3_direction"]
+    motor3_seconds = params["motor3_seconds"]
+    if motor3_direction == "cw":
+        await loop.run_in_executor(None, motor3_cw, motor3_seconds)
+    elif motor3_direction == "ccw":
+        await loop.run_in_executor(None, motor3_ccw, motor3_seconds)
+    else:
+        raise RuntimeError(f"柜号 {cabinet_number} 的 motor3_direction 配置无效")
+
+    if motor1_down_turns:
+        await loop.run_in_executor(None, rotate_turns, 1, 1, motor1_down_turns)
+    if motor2_right_turns:
+        await loop.run_in_executor(None, rotate_turns, 2, 1, motor2_right_turns)
+
+
+def build_scan_result(qr_data: dict, parcel_dict: dict) -> ScanResultData:
+    return ScanResultData(
+        tracking_no=qr_data["tracking_no"],
+        company=qr_data.get("company", "未知"),
+        receiver_name=qr_data.get("receiver_name", "未知"),
+        receiver_phone=qr_data["receiver_phone"],
+        cabinet_number=parcel_dict["cabinet_number"],
+        is_new_user=False
+    )
+
+
+def build_preview_data(token: str, qr_data: dict, cabinet_number: str) -> dict:
+    return {
+        "token": token,
+        "tracking_no": qr_data["tracking_no"],
+        "company": qr_data.get("company", "未知"),
+        "receiver_name": qr_data.get("receiver_name", "未知"),
+        "receiver_phone": qr_data["receiver_phone"],
+        "cabinet_number": cabinet_number,
+    }
+
+
+def cleanup_pending_inbound_tasks():
+    now = time.time()
+    expired_tokens = [
+        token for token, task in PENDING_INBOUND_TASKS.items()
+        if now - task["created_at"] > PENDING_INBOUND_TTL_SECONDS
+    ]
+    for token in expired_tokens:
+        PENDING_INBOUND_TASKS.pop(token, None)
+
+
+def get_pending_cabinet_numbers(exclude_token: str | None = None) -> set:
+    cleanup_pending_inbound_tasks()
+    return {
+        task["cabinet_number"]
+        for token, task in PENDING_INBOUND_TASKS.items()
+        if token != exclude_token
+    }
+
+
+def validate_inbound_qr(qr_data: dict) -> APIResponse | None:
     tracking_no = qr_data.get("tracking_no")
     receiver_phone = qr_data.get("receiver_phone")
 
@@ -36,42 +115,138 @@ async def scan_and_store():
         return APIResponse(code=400, message="二维码数据不完整，缺少快递单号或收件人手机号")
     if receiver_phone == "UNKNOWN_PHONE":
         return APIResponse(code=400, message="二维码中未包含有效收件人手机号")
+    return None
 
-    company = qr_data.get("company", "未知")
-    receiver_name = qr_data.get("receiver_name", "未知")
 
-    try:
-        parcel_dict = ParcelRepository.add_parcel(
-            tracking_no=tracking_no,
-            receiver_phone=receiver_phone,
-            extra_info={"company": company, "receiver_name": receiver_name}
-        )
-    except RuntimeError as e:
-        return APIResponse(code=400, message=f"入库失败：{str(e)}")
-    except Exception as e:
-        logger.error(f"扫描入库异常: {e}")
-        return APIResponse(code=500, message=f"系统内部异常：{str(e)}")
-
-    result_data = ScanResultData(
-        tracking_no=tracking_no,
-        company=company,
-        receiver_name=receiver_name,
-        receiver_phone=receiver_phone,
-        cabinet_number=parcel_dict["cabinet_number"],
-        is_new_user=False
+def create_parcel_from_qr(qr_data: dict, cabinet_number: str) -> dict:
+    return ParcelRepository.add_parcel(
+        tracking_no=qr_data["tracking_no"],
+        receiver_phone=qr_data["receiver_phone"],
+        cabinet_number=cabinet_number,
+        status=1,
+        extra_info={
+            "company": qr_data.get("company", "未知"),
+            "receiver_name": qr_data.get("receiver_name", "未知"),
+            "qr_status": qr_data.get("status"),
+            "qr_in_time": qr_data.get("in_time")
+        }
     )
 
-    return APIResponse(message="入库成功", data=result_data)
+
+async def scan_inbound_qr(request: Request) -> APIResponse | dict:
+    if not app_state.camera:
+        return APIResponse(code=500, message="摄像头未就绪")
+    if not app_state.scanner:
+        return APIResponse(code=500, message="扫描器未就绪")
+
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + SCAN_IN_WINDOW_SECONDS
+    last_camera_error = False
+
+    while loop.time() < deadline:
+        if await request.is_disconnected():
+            return APIResponse(code=499, message="扫码已取消")
+
+        success, frame = app_state.camera.get_frame()
+        if not success or frame is None:
+            last_camera_error = True
+            await asyncio.sleep(SCAN_IN_INTERVAL_SECONDS)
+            continue
+
+        last_camera_error = False
+        _, qr_data_list = app_state.scanner.scan(frame)
+        if qr_data_list:
+            return qr_data_list[0]
+
+        await asyncio.sleep(SCAN_IN_INTERVAL_SECONDS)
+
+    if last_camera_error:
+        return APIResponse(code=500, message="摄像头抓图失败")
+    return APIResponse(code=400, message=f"{SCAN_IN_WINDOW_SECONDS} 秒内未检测到有效条码/二维码")
+
+
+@router.post("/scan_in/preview", response_model=APIResponse)
+async def preview_scan_in(request: Request):
+    qr_result = await scan_inbound_qr(request)
+    if isinstance(qr_result, APIResponse):
+        return qr_result
+
+    qr_data = qr_result
+    invalid_response = validate_inbound_qr(qr_data)
+    if invalid_response:
+        return invalid_response
+
+    async with STATION_INBOUND_LOCK:
+        try:
+            tracking_no = qr_data["tracking_no"]
+            if ParcelRepository.get_parcel_by_tracking_no(tracking_no):
+                return APIResponse(code=400, message=f"入库失败：快递单号 {tracking_no} 已存在")
+
+            cabinet_number = ParcelRepository.allocate_cabinet(
+                set(CABINET_MOVE_PARAMS) - get_pending_cabinet_numbers()
+            )
+            token = uuid.uuid4().hex
+            PENDING_INBOUND_TASKS[token] = {
+                "qr_data": qr_data,
+                "cabinet_number": cabinet_number,
+                "created_at": time.time(),
+            }
+        except RuntimeError as e:
+            return APIResponse(code=400, message=f"预分配失败：{str(e)}")
+        except Exception as e:
+            logger.exception("扫码预览异常")
+            return APIResponse(code=500, message=f"系统内部异常：{str(e)}")
+
+    return APIResponse(message="扫码成功，请确认入库", data=build_preview_data(token, qr_data, cabinet_number))
+
+
+@router.post("/scan_in/confirm", response_model=APIResponse)
+async def confirm_scan_in(payload: dict):
+    token = payload.get("token") if isinstance(payload, dict) else None
+    if not token:
+        return APIResponse(code=400, message="缺少入库确认 token")
+
+    async with STATION_INBOUND_LOCK:
+        cleanup_pending_inbound_tasks()
+        task = PENDING_INBOUND_TASKS.get(token)
+        if not task:
+            return APIResponse(code=400, message="入库确认已过期，请重新扫码")
+
+        qr_data = task["qr_data"]
+        cabinet_number = task["cabinet_number"]
+
+        try:
+            tracking_no = qr_data["tracking_no"]
+            if ParcelRepository.get_parcel_by_tracking_no(tracking_no):
+                PENDING_INBOUND_TASKS.pop(token, None)
+                return APIResponse(code=400, message=f"入库失败：快递单号 {tracking_no} 已存在")
+
+            if cabinet_number in ParcelRepository.get_active_cabinet_numbers():
+                PENDING_INBOUND_TASKS.pop(token, None)
+                return APIResponse(code=400, message=f"入库失败：预分配货柜 {cabinet_number} 已被占用，请重新扫码")
+
+            await move_parcel_to_cabinet(cabinet_number)
+            parcel_dict = create_parcel_from_qr(qr_data, cabinet_number)
+            PENDING_INBOUND_TASKS.pop(token, None)
+        except RuntimeError as e:
+            return APIResponse(code=400, message=f"入库失败：{str(e)}")
+        except Exception as e:
+            logger.exception("确认入库异常")
+            return APIResponse(code=500, message=f"系统内部异常：{str(e)}")
+
+    return APIResponse(message=f"入库成功：已分配 {parcel_dict['cabinet_number']}", data=build_scan_result(qr_data, parcel_dict))
+
+
+@router.post("/scan_in", response_model=APIResponse)
+async def scan_and_store(request: Request):
+    return await preview_scan_in(request)
 
 
 @router.post("/move_to_a02", response_model=APIResponse)
-async def move_to_a02():
-    try:
-        await asyncio.sleep(15)
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, rotate_turns, 2, 0, 20)
-        await loop.run_in_executor(None, motor3_cw, 10)
-        await loop.run_in_executor(None, rotate_turns, 2, 1, 20)
+async def move_to_a02():#注：目前演示只做了移动到某一特定柜前，期末考实在是等不住了，今天7月4号还在写文档
+    try:                #7月6号开始考期末考，还是一点都没开始复习，实际初赛的时候将会完善这一段一键入库的代码
+        await asyncio.sleep(5)
+        await move_parcel_to_cabinet("A02")
 
         data = DEMO_DATA_LIST[0]
         parcel_dict = ParcelRepository.add_parcel(
@@ -82,7 +257,7 @@ async def move_to_a02():
         )
 
         return APIResponse(
-            message=f"快捷操作完成：电机2左旋20圈→电机3顺时针10秒→电机2右旋20圈，已入库 {data['tracking_no']}",
+            message=f"快捷操作完成：已入库 {data['tracking_no']}",
             data=parcel_dict
         )
     except Exception as e:

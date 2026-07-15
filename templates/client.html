@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SmartStation - 客户体验端</title>
-    <link rel="stylesheet" href="/static/css/client.css">
+    <link rel="stylesheet" href="/static/css/client.css?v=20260715-scan-lock-notice">
 </head>
 <body>
     <!-- 整体布局 -->
@@ -35,10 +35,12 @@
                 <div class="card">
                     <div class="card-icon">&#x1F6AA;</div>
                     <h2>欢迎光临</h2>
-                    <p>请正对摄像头后点击按钮进行人脸验证</p>
-                    <button id="btn-auth" class="btn btn-primary btn-large">刷脸认证</button>
+                    <p>请正对摄像头后选择入门或出门</p>
+                    <div class="action-row">
+                        <button id="btn-exit" class="btn btn-outline btn-large">刷脸出门</button>
+                        <button id="btn-auth" class="btn btn-primary btn-large">刷脸入门</button>
+                    </div>
                 </div>
-                <button id="btn-pickup" class="btn btn-primary btn-large">扫码取件</button>
             </div>
 
             <!-- ====== 认证结果弹窗 ====== -->
@@ -56,6 +58,6 @@
 
     </div>
 
-    <script src="/static/js/client.js"></script>
+    <script src="/static/js/client.js?v=20260715-scan-lock-notice"></script>
 </body>
 </html>

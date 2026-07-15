@@ -10,8 +10,14 @@ from database.constants import (
     CABINET_MAX_CAPACITY
 )
 
-def _generate_cabinet_number(existing_numbers: set) -> str:
+def _generate_cabinet_number(existing_numbers: set, allowed_cabinets: set | None = None) -> str:
     """从尚未占用的货柜号中随机选一个返回，若已满则抛出异常"""
+    if allowed_cabinets is not None:
+        available = sorted(set(allowed_cabinets) - set(existing_numbers))
+        if not available:
+            raise RuntimeError("可用机械臂货柜已满，无法分配新柜号")
+        return random.choice(available)
+
     if len(existing_numbers) >= CABINET_MAX_CAPACITY:
         raise RuntimeError("所有货柜已满，无法分配新柜号")
     occupied = set(existing_numbers)
@@ -134,6 +140,27 @@ class UserRepository:
 
 
 class ParcelRepository:
+    @staticmethod
+    def get_active_cabinet_numbers() -> set:
+        with DatabaseManager.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT cabinet_number FROM parcels WHERE status = 1')
+            return {row['cabinet_number'] for row in cursor.fetchall()}
+
+    @staticmethod
+    def allocate_cabinet(allowed_cabinets: set | None = None) -> str:
+        """只分配柜号，不写入包裹记录。用于先执行机械臂、成功后再入库。"""
+        occupied = ParcelRepository.get_active_cabinet_numbers()
+        return _generate_cabinet_number(occupied, allowed_cabinets)
+
+    @staticmethod
+    def get_parcel_by_tracking_no(tracking_no: str) -> dict:
+        with DatabaseManager.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM parcels WHERE tracking_no = ?', (tracking_no,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
     @staticmethod
     def add_parcel(tracking_no: str, cabinet_number: str = "", receiver_phone: str = "",
                    status: int = 1, extra_info: dict = None) -> dict:
@@ -333,3 +360,10 @@ class AccessLogRepository:
                 row_dict['picked_parcels'] = json.loads(row_dict['picked_parcels']) if row_dict['picked_parcels'] else []
                 results.append(row_dict)
             return results
+    @staticmethod
+    def delete_logs_by_user_id(user_id: int) -> bool:
+        with DatabaseManager.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM access_logs WHERE user_id = ?', (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0

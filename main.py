@@ -17,6 +17,7 @@ from database.models import UserRepository
 # 导入独立 CV/硬件 服务
 from services.camera_manager import get_camera
 from services.face_recognition import FaceRecognizer
+from services.hardware_manager import init as init_cabinet_hardware, lock_all_cabinets
 from services.scanner import QRScanner
 
 # 导入路由 (稍后我们将实现这些文件)
@@ -48,6 +49,9 @@ async def lifespan(app: FastAPI):
     app_state.scanner = QRScanner()
     logger.info("条码/二维码解析引擎加载完毕。")
 
+    init_cabinet_hardware()
+    logger.info("柜体硬件管理模块初始化完成。")
+
     # 3. 预热内存人脸 1:N 检索矩阵
     # 启动时进行一次全量同步读取是安全的，它准备好了再对外提供服务
     active_users = UserRepository.get_all_active_faces()
@@ -58,6 +62,12 @@ async def lifespan(app: FastAPI):
 
     logger.info("=== 系统正在关闭 ===")
     # 4. 安全回收硬件资源
+    try:
+        lock_all_cabinets()
+        logger.info("柜体电磁铁已恢复锁定。")
+    except Exception:
+        logger.exception("柜体硬件释放失败。")
+
     if app_state.camera:
         app_state.camera.stop()
         logger.info("摄像头线程已安全释放。")

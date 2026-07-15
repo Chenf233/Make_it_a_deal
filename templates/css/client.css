@@ -360,6 +360,11 @@ body {
     border-color: rgba(148, 163, 184, 0.5);
 }
 
+.btn.cancelling {
+    background: var(--danger);
+    color: #fff;
+}
+
 .btn-large {
     padding: 16px 44px;
     font-size: 18px;
@@ -397,12 +402,6 @@ body {
     flex: 1;
 }
 
-/* ============ 取件按钮态 ============ */
-#btn-pickup.cancelling {
-    background: var(--danger);
-    color: #fff;
-}
-
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
@@ -418,7 +417,7 @@ body {
     font-size: 15px;
     font-weight: 600;
     color: #fff;
-    z-index: 300;
+    z-index: 1200;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
     transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     max-width: 520px;
@@ -444,14 +443,18 @@ body {
 
 /* ============ 认证弹窗 ============ */
 #auth-popup {
-    position: absolute;
+    position: fixed;
     top: 0;
-    left: 0;
+    left: 540px;
     right: 0;
     bottom: 0;
+    width: auto;
+    max-width: none;
+    height: 100vh;
     background: rgba(15, 23, 42, 0.88);
-    z-index: 200;
+    z-index: 1000;
     display: flex;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
     padding: 40px;
@@ -463,19 +466,23 @@ body {
 }
 
 .popup-card-wide {
-    padding: 32px 36px;
-    text-align: left;
+    width: min(760px, calc(100vw - 64px));
+    max-height: calc(100vh - 80px);
+    padding: 42px 48px 38px;
+    text-align: center;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
 }
 
 #popup-title {
-    font-size: 22px;
+    font-size: 28px;
     font-weight: 700;
-    margin-bottom: 20px;
+    margin-bottom: 26px;
     text-align: center;
 }
 
 #popup-body {
-    margin-bottom: 20px;
+    margin-bottom: 28px;
 }
 
 #popup-footer {
@@ -496,8 +503,9 @@ body {
 
 /* 弹窗内包裹列表 */
 .popup-parcels {
-    max-height: 280px;
+    max-height: 340px;
     overflow-y: auto;
+    text-align: left;
 }
 
 .popup-parcels::-webkit-scrollbar {
@@ -569,26 +577,27 @@ body {
 .exit-stats {
     display: flex;
     justify-content: center;
-    gap: 32px;
-    margin-bottom: 16px;
+    gap: 44px;
+    margin-bottom: 22px;
 }
 
 .exit-stat {
     text-align: center;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
+    min-width: 96px;
 }
 
 .es-label {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 1px;
 }
 
 .es-value {
-    font-size: 28px;
+    font-size: 38px;
     font-weight: 700;
     color: var(--text);
 }
@@ -596,31 +605,59 @@ body {
 .exit-warning {
     text-align: center;
     color: var(--warning);
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
-    margin-bottom: 12px;
+    margin-bottom: 18px;
 }
 
 .exit-ok {
     text-align: center;
     color: var(--success);
-    font-size: 14px;
+    font-size: 18px;
     font-weight: 600;
-    margin-bottom: 12px;
+    margin-bottom: 18px;
 }
 
 .popup-actions {
     display: flex;
-    gap: 12px;
+    gap: 18px;
     justify-content: center;
+    flex-wrap: nowrap;
 }
 
 .popup-actions .btn {
-    min-width: 120px;
+    min-width: 150px;
+    padding-left: 24px;
+    padding-right: 24px;
 }
 
-/* 待机面板中的取件按钮 */
-#state-idle > .btn {
-    width: 100%;
-    max-width: 480px;
+@media (max-width: 720px) {
+    #auth-popup {
+        padding: 24px;
+    }
+
+    .popup-card-wide {
+        width: min(100%, calc(100vw - 32px));
+        padding: 32px 24px;
+    }
+
+    .exit-stats {
+        gap: 18px;
+    }
+
+    .exit-stat {
+        min-width: 72px;
+    }
+
+    .es-value {
+        font-size: 32px;
+    }
+
+    .popup-actions {
+        flex-wrap: wrap;
+    }
+
+    .popup-actions .btn {
+        min-width: 132px;
+    }
 }

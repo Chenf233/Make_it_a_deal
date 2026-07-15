@@ -7,6 +7,7 @@ from core.state import app_state
 from database.models import ParcelRepository, UserRepository, AccessLogRepository
 from services.face_recognition.constants import SIMILARITY_THRESHOLD
 from services.camera_manager.constants import DEMO_OVERLAY_ENABLED
+from services.hardware_manager import close_user_cabinet
 from services.scanner.generator import generate_qr_image
 
 logger = logging.getLogger("SmartStation")
@@ -120,6 +121,11 @@ class PickupHandler:
         )
 
         logger.info(f"用户 {user_id} 确认取件 {tracking_no}，状态已更新")
+
+        try:
+            close_user_cabinet(user_id, matched["cabinet_number"])
+        except Exception:
+            logger.exception("关闭柜号 %s 硬件失败", matched["cabinet_number"])
 
         return True, f"取件成功：{tracking_no}", {
             "parcel_id": matched["parcel_id"],
