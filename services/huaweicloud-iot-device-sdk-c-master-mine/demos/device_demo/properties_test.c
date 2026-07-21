@@ -45,13 +45,13 @@
  */
 
 // You can get the access address from IoT Console "Overview" -> "Access Information"
-char *g_address = "XXXX"; 
+char *g_address = "306f691edb.st1.iotda-device.cn-north-4.myhuaweicloud.com"; 
 char *g_port = "8883";
 
 // deviceId, The mqtt protocol requires the user name to be filled in.
 // Please fill in the deviceId
-char *g_deviceId = "XXXX"; 
-char *g_secret = "XXXX";
+char *g_deviceId = "6a5f559fcbb0cf6bb9715319_RDKX5_SMStation"; 
+char *g_secret = "250889c58ea834858882";
 
 int g_smoke_value = 14; // product models
 void TimeSleep(int ms)
@@ -79,10 +79,10 @@ static void Test_PropertiesReport(void)
     ST_IOTA_SERVICE_DATA_INFO services[serviceNum];
 
     char service[100] = {0};
-    (void)sprintf_s(service, sizeof(service), "{\"Smoke_value\": %d}", g_smoke_value); 
+    (void)sprintf_s(service, sizeof(service), "{\"A地日均包裹量 \": %d}", g_smoke_value); 
     // --------------- the data of service-------------------------------
     services[0].event_time = GetEventTimesStamp(); // if event_time is set to NULL, the time will be the iot-platform's time.
-    services[0].service_id = "Smoke";
+    services[0].service_id = "驿站1";
     services[0].properties = service;
 
     int messageId = IOTA_PropertiesReport(services, serviceNum, 0, NULL);
