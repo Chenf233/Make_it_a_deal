@@ -11,6 +11,8 @@ PULSES_PER_HALF_REV = 400
 MOTOR3_CW_PIN = 37
 MOTOR3_CCW_PIN = 35
 
+WHEEL_PINS = (26, 29, 31, 36)
+
 _initialized = False
 
 def init():
@@ -25,6 +27,8 @@ def init():
     GPIO.setup(DIR_PIN2, GPIO.OUT, initial=GPIO.LOW)
     GPIO.setup(MOTOR3_CW_PIN, GPIO.OUT, initial=GPIO.LOW)
     GPIO.setup(MOTOR3_CCW_PIN, GPIO.OUT, initial=GPIO.LOW)
+    for pin in WHEEL_PINS:
+        GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
     _initialized = True
 
 init()
@@ -96,4 +100,35 @@ def motor3_ccw(duration):
     time.sleep(duration)
     GPIO.output(MOTOR3_CCW_PIN, GPIO.LOW)
 
-__all__ = ["half_turn", "half_turn2", "rotate_turns", "start_continuous", "stop_continuous", "motor3_cw", "motor3_ccw"]
+def _validate_wheel_pin(pin):
+    if pin not in WHEEL_PINS:
+        raise ValueError(f"不支持的轮子 GPIO 引脚: {pin}")
+
+def start_wheel(pin):
+    init()
+    _validate_wheel_pin(pin)
+    GPIO.output(pin, GPIO.HIGH)
+
+def stop_wheel(pin):
+    init()
+    _validate_wheel_pin(pin)
+    GPIO.output(pin, GPIO.LOW)
+
+def stop_all_wheels():
+    init()
+    for pin in WHEEL_PINS:
+        GPIO.output(pin, GPIO.LOW)
+
+__all__ = [
+    "WHEEL_PINS",
+    "half_turn",
+    "half_turn2",
+    "rotate_turns",
+    "start_continuous",
+    "stop_continuous",
+    "motor3_cw",
+    "motor3_ccw",
+    "start_wheel",
+    "stop_wheel",
+    "stop_all_wheels",
+]

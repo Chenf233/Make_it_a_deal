@@ -18,10 +18,11 @@ from database.models import UserRepository
 from services.camera_manager import get_camera
 from services.face_recognition import FaceRecognizer
 from services.hardware_manager import init as init_cabinet_hardware, lock_all_cabinets
+from services.motor import stop_all_wheels
 from services.scanner import QRScanner
 
 # 导入路由 (稍后我们将实现这些文件)
-from routers import backend_api, station_api, client_api
+from routers import backend_api, station_api, client_api, wheel_api
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -67,6 +68,12 @@ async def lifespan(app: FastAPI):
         logger.info("柜体电磁铁已恢复锁定。")
     except Exception:
         logger.exception("柜体硬件释放失败。")
+
+    try:
+        stop_all_wheels()
+        logger.info("轮子电机 GPIO 已全部恢复低电平。")
+    except Exception:
+        logger.exception("轮子电机停止失败。")
 
     if app_state.camera:
         app_state.camera.stop()
@@ -116,6 +123,10 @@ async def client_page(request: Request):
     # 修改这里
     return templates.TemplateResponse(request=request, name="client.html")
 
+@app.get("/wheels", response_class=HTMLResponse, summary="轮子电机控制页面")
+async def wheels_page(request: Request):
+    return templates.TemplateResponse(request=request, name="wheels.html")
+
 
 # ==========================
 # 全局 WebSocket 通信枢纽
@@ -144,3 +155,4 @@ app.mount("/static/js", StaticFiles(directory="templates/js"), name="static_js")
 app.include_router(backend_api.router, prefix="/api")
 app.include_router(station_api.router, prefix="/api")
 app.include_router(client_api.router, prefix="/api")
+app.include_router(wheel_api.router, prefix="/api")

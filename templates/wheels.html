@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>轮子电机控制 | SmartStation</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0a0d10;
+            --panel: #12171c;
+            --line: #29323a;
+            --text: #eef4f7;
+            --muted: #8d9ba5;
+            --accent: #d7ff38;
+            --danger: #ff5d52;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            padding: 24px;
+            display: grid;
+            place-items: center;
+            background:
+                linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+                radial-gradient(circle at 20% 0%, #24301c 0, transparent 35%),
+                var(--bg);
+            background-size: 32px 32px, 32px 32px, auto, auto;
+            color: var(--text);
+            font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+        }
+
+        main {
+            width: min(880px, 100%);
+        }
+
+        header {
+            margin-bottom: 28px;
+        }
+
+        .eyebrow {
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 8px 0 10px;
+            font-size: clamp(34px, 7vw, 64px);
+            line-height: 0.95;
+        }
+
+        .intro {
+            max-width: 680px;
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .motor-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .motor-button {
+            min-height: 190px;
+            padding: 24px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: space-between;
+            background: linear-gradient(145deg, #171d22, #0f1317);
+            color: var(--text);
+            cursor: pointer;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: transform 100ms ease, border-color 100ms ease, background 100ms ease;
+        }
+
+        .motor-button:hover {
+            border-color: #53606a;
+        }
+
+        .motor-button:focus-visible {
+            outline: 3px solid rgba(215, 255, 56, 0.35);
+            outline-offset: 3px;
+        }
+
+        .motor-button.running {
+            transform: scale(0.98);
+            border-color: var(--accent);
+            background: linear-gradient(145deg, #354414, #182009);
+        }
+
+        .pin-label {
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+        }
+
+        .pin-number {
+            font-family: Consolas, monospace;
+            font-size: clamp(58px, 10vw, 88px);
+            font-weight: 800;
+            line-height: 0.85;
+        }
+
+        .motor-state {
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .motor-button.running .motor-state {
+            color: var(--accent);
+        }
+
+        .footer-row {
+            margin-top: 18px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        #stopAllButton {
+            padding: 14px 20px;
+            border: 1px solid var(--danger);
+            border-radius: 10px;
+            background: transparent;
+            color: #ff8b84;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        #stopAllButton:hover {
+            background: rgba(255, 93, 82, 0.1);
+        }
+
+        #status {
+            margin: 0;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        #status.error {
+            color: #ff8b84;
+        }
+
+        @media (max-width: 620px) {
+            body {
+                padding: 18px;
+                place-items: start center;
+            }
+
+            .motor-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .motor-button {
+                min-height: 145px;
+            }
+
+            .footer-row {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <header>
+            <span class="eyebrow">Wheel GPIO Test Panel</span>
+            <h1>轮子电机控制</h1>
+            <p class="intro">按住按钮时，对应的 BOARD 物理引脚输出高电平；松开后恢复低电平。当前尚未标定四个轮子的安装方位。</p>
+        </header>
+
+        <section class="motor-grid" aria-label="轮子电机按钮">
+            <button class="motor-button" type="button" data-pin="26">
+                <span class="pin-label">BOARD GPIO</span>
+                <strong class="pin-number">26</strong>
+                <span class="motor-state">按住运行</span>
+            </button>
+            <button class="motor-button" type="button" data-pin="29">
+                <span class="pin-label">BOARD GPIO</span>
+                <strong class="pin-number">29</strong>
+                <span class="motor-state">按住运行</span>
+            </button>
+            <button class="motor-button" type="button" data-pin="31">
+                <span class="pin-label">BOARD GPIO</span>
+                <strong class="pin-number">31</strong>
+                <span class="motor-state">按住运行</span>
+            </button>
+            <button class="motor-button" type="button" data-pin="36">
+                <span class="pin-label">BOARD GPIO</span>
+                <strong class="pin-number">36</strong>
+                <span class="motor-state">按住运行</span>
+            </button>
+        </section>
+
+        <div class="footer-row">
+            <button id="stopAllButton" type="button">全部停止</button>
+            <p id="status" role="status">四路输出均为低电平。</p>
+        </div>
+    </main>
+
+    <script>
+        const motorButtons = [...document.querySelectorAll(".motor-button")];
+        const stopAllButton = document.getElementById("stopAllButton");
+        const status = document.getElementById("status");
+
+        function setStatus(message, isError = false) {
+            status.textContent = message;
+            status.classList.toggle("error", isError);
+        }
+
+        async function sendCommand(url) {
+            const response = await fetch(url, { method: "POST" });
+            const result = await response.json();
+            if (!response.ok || (result.code !== undefined && result.code !== 200)) {
+                throw new Error(result.message || "控制请求失败");
+            }
+            return result;
+        }
+
+        function setButtonRunning(button, running) {
+            button.dataset.running = running ? "1" : "0";
+            button.classList.toggle("running", running);
+            button.querySelector(".motor-state").textContent = running ? "高电平输出中" : "按住运行";
+        }
+
+        function queueButtonCommand(button, command) {
+            const previous = button.commandQueue || Promise.resolve();
+            button.commandQueue = previous.catch(() => {}).then(command);
+            return button.commandQueue;
+        }
+
+        function startMotor(button) {
+            if (button.dataset.running === "1") return;
+
+            const pin = button.dataset.pin;
+            setButtonRunning(button, true);
+            setStatus(`正在启动 GPIO ${pin}...`);
+            queueButtonCommand(button, async () => {
+                try {
+                    const result = await sendCommand(`/api/wheels/${pin}/start`);
+                    if (button.dataset.running === "1") {
+                        setStatus(result.message || `GPIO ${pin} 正在输出高电平。`);
+                    }
+                } catch (error) {
+                    setButtonRunning(button, false);
+                    setStatus(error.message, true);
+                }
+            });
+        }
+
+        function stopMotor(button) {
+            if (button.dataset.running !== "1") return;
+
+            const pin = button.dataset.pin;
+            setButtonRunning(button, false);
+            setStatus(`正在停止 GPIO ${pin}...`);
+            queueButtonCommand(button, async () => {
+                try {
+                    const result = await sendCommand(`/api/wheels/${pin}/stop`);
+                    if (button.dataset.running !== "1") {
+                        setStatus(result.message || `GPIO ${pin} 已恢复低电平。`);
+                    }
+                } catch (error) {
+                    setStatus(error.message, true);
+                }
+            });
+        }
+
+        async function stopAll() {
+            motorButtons.forEach(button => setButtonRunning(button, false));
+            try {
+                await Promise.allSettled(motorButtons.map(button => button.commandQueue));
+                const result = await sendCommand("/api/wheels/stop-all");
+                setStatus(result.message || "四路轮子电机已全部停止。");
+            } catch (error) {
+                setStatus(error.message, true);
+            }
+        }
+
+        motorButtons.forEach(button => {
+            button.addEventListener("contextmenu", event => event.preventDefault());
+            button.addEventListener("pointerdown", event => {
+                if (event.pointerType === "mouse" && event.button !== 0) return;
+                event.preventDefault();
+                button.setPointerCapture(event.pointerId);
+                startMotor(button);
+            });
+            button.addEventListener("pointerup", event => {
+                event.preventDefault();
+                stopMotor(button);
+            });
+            button.addEventListener("pointercancel", () => stopMotor(button));
+            button.addEventListener("lostpointercapture", () => stopMotor(button));
+            button.addEventListener("keydown", event => {
+                if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+                    event.preventDefault();
+                    startMotor(button);
+                }
+            });
+            button.addEventListener("keyup", event => {
+                if (event.key === " " || event.key === "Enter") {
+                    event.preventDefault();
+                    stopMotor(button);
+                }
+            });
+        });
+
+        stopAllButton.addEventListener("click", stopAll);
+        window.addEventListener("blur", stopAll);
+        window.addEventListener("pagehide", () => {
+            motorButtons.forEach(button => setButtonRunning(button, false));
+            navigator.sendBeacon("/api/wheels/stop-all");
+        });
+    </script>
+</body>
+</html>
