@@ -1,0 +1,16 @@
+defines = -DSSH_SWITCH\$ =\$ 1 -DBRIDGE_SWITCH\$ =\$ 1
+include_dirs = -I../include/util -I../include/third_party/libboundscheck -I../include/third_party/cjson -I../include/third_party/zlib -I../include
+cflags = -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-parameter -fPIC -pthread -w
+cflags_c =
+target_out_dir = obj/src/util
+target_output_name = libutil
+
+build obj/src/util/libutil.json_util.o: cc ../src/util/json_util.c
+build obj/src/util/libutil.log_util.o: cc ../src/util/log_util.c
+build obj/src/util/libutil.string_util.o: cc ../src/util/string_util.c
+build obj/src/util/libutil.mqttv5_util.o: cc ../src/util/mqttv5_util.c
+
+build obj/src/util/libutil.a: alink obj/src/util/libutil.json_util.o obj/src/util/libutil.log_util.o obj/src/util/libutil.string_util.o obj/src/util/libutil.mqttv5_util.o
+  arflags =
+  output_extension = .a
+  output_dir = 

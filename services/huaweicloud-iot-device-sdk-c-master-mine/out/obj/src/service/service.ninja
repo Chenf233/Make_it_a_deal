@@ -1,0 +1,17 @@
+defines = -DSSH_SWITCH\$ =\$ 1 -DBRIDGE_SWITCH\$ =\$ 1
+include_dirs = -I../include -I../include/service -I../include/util -I../include/agentlite -I../include/base -I../include/third_party/cjson -I../include/service/device_rule -I../include/service/sys_hal -I../include/service/detect_anomaly -I../include/third_party/libboundscheck
+cflags = -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-parameter -fPIC -pthread -w
+cflags_c =
+target_out_dir = obj/src/service
+target_output_name = libservice
+
+build obj/src/service/libservice.base.o: cc ../src/service/base.c
+build obj/src/service/libservice.callback_func.o: cc ../src/service/callback_func.c
+build obj/src/service/libservice.data_trans.o: cc ../src/service/data_trans.c
+build obj/src/service/libservice.login.o: cc ../src/service/login.c
+build obj/src/service/libservice.subscribe.o: cc ../src/service/subscribe.c
+
+build obj/src/service/libservice.a: alink obj/src/service/libservice.base.o obj/src/service/libservice.callback_func.o obj/src/service/libservice.data_trans.o obj/src/service/libservice.login.o obj/src/service/libservice.subscribe.o
+  arflags =
+  output_extension = .a
+  output_dir = 

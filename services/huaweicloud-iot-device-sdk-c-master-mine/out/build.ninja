@@ -1,0 +1,72 @@
+ninja_required_version = 1.7.2
+
+rule gn
+  command = ../../../../../../../usr/bin/gn --root=./.. -q --C --regeneration gen .
+  pool = console
+  description = Regenerating ninja files
+
+build build.ninja: gn
+  generator = 1
+  depfile = build.ninja.d
+
+subninja toolchain.ninja
+
+build conf_copy: phony obj/conf_copy.stamp
+build lib_copy: phony obj/lib_copy.stamp
+build mqtt_device_demo: phony MQTT_Demo
+build agentlite: phony obj/src/agentlite/libagentlite.a
+build base: phony obj/src/base/libbase.a
+build bridge_topic: phony obj/src/service/bridge/libbridge_topic.a
+build cjson: phony obj/src/third_party/cjson/libcjson.a
+build dconncaseone_interface: phony obj/src/libdconncaseone_interface.a
+build detect_anomaly: phony obj/src/service/detect_anomaly/libdetect_anomaly.a
+build device_demo: phony obj/src/device_demo/libdevice_demo.a
+build device_rule: phony obj/src/service/device_rule/libdevice_rule.a
+build service: phony obj/src/service/libservice.a
+build sys_hal: phony obj/src/service/sys_hal/libsys_hal.a
+build tunnel: phony obj/src/tunnel/libtunnel.a
+build util: phony obj/src/util/libutil.a
+build $:conf_copy: phony obj/conf_copy.stamp
+build $:lib_copy: phony obj/lib_copy.stamp
+build $:mqtt_device_demo: phony MQTT_Demo
+build src$:dconncaseone_interface: phony obj/src/libdconncaseone_interface.a
+build src/agentlite$:agentlite: phony obj/src/agentlite/libagentlite.a
+build src/agentlite: phony obj/src/agentlite/libagentlite.a
+build src/base$:base: phony obj/src/base/libbase.a
+build src/base: phony obj/src/base/libbase.a
+build src/device_demo$:device_demo: phony obj/src/device_demo/libdevice_demo.a
+build src/device_demo: phony obj/src/device_demo/libdevice_demo.a
+build src/service$:service: phony obj/src/service/libservice.a
+build src/service: phony obj/src/service/libservice.a
+build src/service/bridge$:bridge_topic: phony obj/src/service/bridge/libbridge_topic.a
+build src/service/detect_anomaly$:detect_anomaly: phony obj/src/service/detect_anomaly/libdetect_anomaly.a
+build src/service/detect_anomaly: phony obj/src/service/detect_anomaly/libdetect_anomaly.a
+build src/service/device_rule$:device_rule: phony obj/src/service/device_rule/libdevice_rule.a
+build src/service/device_rule: phony obj/src/service/device_rule/libdevice_rule.a
+build src/service/sys_hal$:sys_hal: phony obj/src/service/sys_hal/libsys_hal.a
+build src/service/sys_hal: phony obj/src/service/sys_hal/libsys_hal.a
+build src/third_party/cjson$:cjson: phony obj/src/third_party/cjson/libcjson.a
+build src/third_party/cjson: phony obj/src/third_party/cjson/libcjson.a
+build src/tunnel$:tunnel: phony obj/src/tunnel/libtunnel.a
+build src/tunnel: phony obj/src/tunnel/libtunnel.a
+build src/util$:util: phony obj/src/util/libutil.a
+build src/util: phony obj/src/util/libutil.a
+
+build all: phony $
+    obj/conf_copy.stamp $
+    obj/lib_copy.stamp $
+    MQTT_Demo $
+    obj/src/libdconncaseone_interface.a $
+    obj/src/agentlite/libagentlite.a $
+    obj/src/base/libbase.a $
+    obj/src/device_demo/libdevice_demo.a $
+    obj/src/service/libservice.a $
+    obj/src/service/bridge/libbridge_topic.a $
+    obj/src/service/detect_anomaly/libdetect_anomaly.a $
+    obj/src/service/device_rule/libdevice_rule.a $
+    obj/src/service/sys_hal/libsys_hal.a $
+    obj/src/third_party/cjson/libcjson.a $
+    obj/src/tunnel/libtunnel.a $
+    obj/src/util/libutil.a
+
+default all

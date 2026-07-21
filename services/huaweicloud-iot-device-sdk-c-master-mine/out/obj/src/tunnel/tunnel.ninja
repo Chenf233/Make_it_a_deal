@@ -1,0 +1,14 @@
+defines = -DSSH_SWITCH\$ =\$ 1 -DBRIDGE_SWITCH\$ =\$ 1
+include_dirs = -I../include/util -I../include/third_party/cjson -I../include/third_party/libboundscheck -I../include/nopoll -I../include/agentlite -I../include/tunnel -I../include/libssh -I../include
+cflags = -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-parameter -fPIC -pthread -w
+cflags_c =
+target_out_dir = obj/src/tunnel
+target_output_name = libtunnel
+
+build obj/src/tunnel/libtunnel.ssh_client.o: cc ../src/tunnel/ssh_client.c
+build obj/src/tunnel/libtunnel.wss_client.o: cc ../src/tunnel/wss_client.c
+
+build obj/src/tunnel/libtunnel.a: alink obj/src/tunnel/libtunnel.ssh_client.o obj/src/tunnel/libtunnel.wss_client.o
+  arflags =
+  output_extension = .a
+  output_dir = 

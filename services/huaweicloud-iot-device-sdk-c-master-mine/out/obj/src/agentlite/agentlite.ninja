@@ -1,0 +1,18 @@
+defines = -DSSH_SWITCH\$ =\$ 1 -DBRIDGE_SWITCH\$ =\$ 1
+include_dirs = -I../include/service -I../include/util -I../include/openssl -I../include/agentlite -I../include/third_party/cjson -I../include/third_party/libboundscheck -I../include/service/device_rule -I../include -I../include/curl -I../include/service/bridge -I../include/tunnel -I../include/nopoll -I../include/base
+cflags = -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-parameter -fPIC -pthread -w
+cflags_c =
+target_out_dir = obj/src/agentlite
+target_output_name = libagentlite
+
+build obj/src/agentlite/libagentlite.iota_init.o: cc ../src/agentlite/iota_init.c
+build obj/src/agentlite/libagentlite.iota_login.o: cc ../src/agentlite/iota_login.c
+build obj/src/agentlite/libagentlite.iota_datatrans.o: cc ../src/agentlite/iota_datatrans.c
+build obj/src/agentlite/libagentlite.iota_payload.o: cc ../src/agentlite/iota_payload.c
+build obj/src/agentlite/libagentlite.iota_defaultCallback.o: cc ../src/agentlite/iota_defaultCallback.c
+build obj/src/agentlite/libagentlite.iota_bridge.o: cc ../src/agentlite/iota_bridge.c
+
+build obj/src/agentlite/libagentlite.a: alink obj/src/agentlite/libagentlite.iota_init.o obj/src/agentlite/libagentlite.iota_login.o obj/src/agentlite/libagentlite.iota_datatrans.o obj/src/agentlite/libagentlite.iota_payload.o obj/src/agentlite/libagentlite.iota_defaultCallback.o obj/src/agentlite/libagentlite.iota_bridge.o
+  arflags =
+  output_extension = .a
+  output_dir = 

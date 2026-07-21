@@ -1,0 +1,13 @@
+defines = -DSSH_SWITCH\$ =\$ 1 -DBRIDGE_SWITCH\$ =\$ 1
+include_dirs = -I../include/third_party/cjson -I../include/third_party/libboundscheck -I../include/agentlite -I../include/util -I../include/service -I../include/service/sys_hal -I../include/service/bridge -I../include/base
+cflags = -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-parameter -fPIC -pthread -w
+cflags_c =
+target_out_dir = obj/src/service/bridge
+target_output_name = libbridge_topic
+
+build obj/src/service/bridge/libbridge_topic.bridge_topic_data.o: cc ../src/service/bridge/bridge_topic_data.c
+
+build obj/src/service/bridge/libbridge_topic.a: alink obj/src/service/bridge/libbridge_topic.bridge_topic_data.o
+  arflags =
+  output_extension = .a
+  output_dir = 
