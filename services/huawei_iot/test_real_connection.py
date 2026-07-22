@@ -202,7 +202,8 @@ class HuaweiIoTRealConnectionTests(unittest.IsolatedAsyncioTestCase):
         missing = sorted(required - set(config))
         self.assertFalse(missing, f"station_iotd 配置缺少字段：{missing}")
         work_path = Path(config["work_path"])
-        self.assertTrue(work_path.is_absolute(), "work_path 必须为绝对路径")
+        if not work_path.is_absolute():
+            work_path = self.executable.parent / work_path
         self.assertTrue((work_path / "conf" / "rootcert.pem").is_file(), "未找到 conf/rootcert.pem")
 
         ldd = shutil.which("ldd")

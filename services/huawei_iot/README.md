@@ -32,7 +32,8 @@ third-party libraries from `$ORIGIN/lib` through its ELF RUNPATH.
 ## Configure
 
 Copy `station_iotd.example.json` to `station_iotd.json` in the SDK root and
-fill in the device values. `station_iotd.json` is ignored by Git.
+fill in the device values. `station_iotd.json` is ignored by Git. `work_path`
+may be `.` when the executable and configuration are in the SDK root.
 
 `work_path` must be the absolute SDK root containing:
 
