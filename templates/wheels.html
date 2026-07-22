@@ -3,17 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>轮子电机控制 | SmartStation</title>
+    <title>底盘控制 | SmartStation</title>
     <style>
         :root {
             color-scheme: dark;
-            --bg: #0a0d10;
-            --panel: #12171c;
-            --line: #29323a;
-            --text: #eef4f7;
-            --muted: #8d9ba5;
-            --accent: #d7ff38;
-            --danger: #ff5d52;
+            --bg: #090c0f;
+            --panel: #12181d;
+            --panel-2: #182027;
+            --line: #2c3841;
+            --text: #f1f5f7;
+            --muted: #91a0aa;
+            --accent: #d8ff3e;
+            --accent-dark: #28340d;
+            --danger: #ff675e;
         }
 
         * {
@@ -29,7 +31,7 @@
             background:
                 linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-                radial-gradient(circle at 20% 0%, #24301c 0, transparent 35%),
+                radial-gradient(circle at 15% 0%, #28351d 0, transparent 34%),
                 var(--bg);
             background-size: 32px 32px, 32px 32px, auto, auto;
             color: var(--text);
@@ -37,11 +39,11 @@
         }
 
         main {
-            width: min(880px, 100%);
+            width: min(940px, 100%);
         }
 
         header {
-            margin-bottom: 28px;
+            margin-bottom: 24px;
         }
 
         .eyebrow {
@@ -54,34 +56,57 @@
 
         h1 {
             margin: 8px 0 10px;
-            font-size: clamp(34px, 7vw, 64px);
+            font-size: clamp(36px, 7vw, 68px);
             line-height: 0.95;
         }
 
         .intro {
-            max-width: 680px;
+            max-width: 720px;
             margin: 0;
             color: var(--muted);
             line-height: 1.7;
         }
 
-        .motor-grid {
+        .dashboard {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 16px;
+            grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+            gap: 18px;
         }
 
-        .motor-button {
-            min-height: 190px;
-            padding: 24px;
+        .panel {
+            padding: 22px;
             border: 1px solid var(--line);
-            border-radius: 18px;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            justify-content: space-between;
-            background: linear-gradient(145deg, #171d22, #0f1317);
+            border-radius: 20px;
+            background: linear-gradient(145deg, rgba(24, 32, 39, 0.96), rgba(14, 19, 23, 0.96));
+            box-shadow: 0 20px 55px rgba(0, 0, 0, 0.28);
+        }
+
+        .panel-title {
+            margin: 0 0 18px;
+            font-size: 17px;
+        }
+
+        .direction-pad {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(90px, 1fr));
+            grid-template-areas:
+                ". forward ."
+                "left stop right"
+                ". backward .";
+            gap: 12px;
+        }
+
+        .motion-button,
+        .stop-button,
+        .destination-button {
+            min-height: 112px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: var(--panel-2);
             color: var(--text);
+            font: inherit;
+            font-size: 17px;
+            font-weight: 800;
             cursor: pointer;
             touch-action: none;
             user-select: none;
@@ -89,93 +114,182 @@
             transition: transform 100ms ease, border-color 100ms ease, background 100ms ease;
         }
 
-        .motor-button:hover {
-            border-color: #53606a;
+        .motion-button:hover,
+        .destination-button:hover {
+            border-color: #53636e;
         }
 
-        .motor-button:focus-visible {
-            outline: 3px solid rgba(215, 255, 56, 0.35);
+        .motion-button:focus-visible,
+        .destination-button:focus-visible,
+        .stop-button:focus-visible {
+            outline: 3px solid rgba(216, 255, 62, 0.32);
             outline-offset: 3px;
         }
 
-        .motor-button.running {
-            transform: scale(0.98);
+        .motion-button.running {
+            transform: scale(0.97);
             border-color: var(--accent);
-            background: linear-gradient(145deg, #354414, #182009);
-        }
-
-        .pin-label {
-            color: var(--muted);
-            font-size: 14px;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-        }
-
-        .pin-number {
-            font-family: Consolas, monospace;
-            font-size: clamp(58px, 10vw, 88px);
-            font-weight: 800;
-            line-height: 0.85;
-        }
-
-        .motor-state {
-            color: var(--muted);
-            font-size: 14px;
-        }
-
-        .motor-button.running .motor-state {
+            background: var(--accent-dark);
             color: var(--accent);
         }
 
-        .footer-row {
-            margin-top: 18px;
+        .motion-button[disabled],
+        .destination-button[disabled] {
+            cursor: not-allowed;
+            opacity: 0.42;
+        }
+
+        [data-motion="forward"] {
+            grid-area: forward;
+        }
+
+        [data-motion="backward"] {
+            grid-area: backward;
+        }
+
+        [data-motion="turn-left"] {
+            grid-area: left;
+        }
+
+        [data-motion="turn-right"] {
+            grid-area: right;
+        }
+
+        .stop-button {
+            grid-area: stop;
+            border-color: rgba(255, 103, 94, 0.65);
+            background: rgba(255, 103, 94, 0.08);
+            color: #ff918b;
+        }
+
+        .stop-button:hover {
+            background: rgba(255, 103, 94, 0.15);
+        }
+
+        .destination-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .destination-button {
+            min-height: 138px;
             display: flex;
-            align-items: center;
-            gap: 16px;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 20px;
         }
 
-        #stopAllButton {
-            padding: 14px 20px;
-            border: 1px solid var(--danger);
-            border-radius: 10px;
-            background: transparent;
-            color: #ff8b84;
-            font: inherit;
+        .destination-button strong {
+            font-size: 34px;
+        }
+
+        .destination-button span {
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .position-card {
+            margin-top: 14px;
+            padding: 18px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: rgba(0, 0, 0, 0.16);
+        }
+
+        .position-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .position-head span {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        #positionValue {
+            font-family: Consolas, monospace;
+            font-size: 28px;
+        }
+
+        .track {
+            position: relative;
+            height: 8px;
+            margin: 20px 5px 8px;
+            border-radius: 999px;
+            background: #303a41;
+        }
+
+        .track::before,
+        .track::after {
+            position: absolute;
+            top: 17px;
+            color: var(--muted);
+            font-size: 12px;
             font-weight: 800;
-            cursor: pointer;
         }
 
-        #stopAllButton:hover {
-            background: rgba(255, 93, 82, 0.1);
+        .track::before {
+            left: -5px;
+            content: "B";
+        }
+
+        .track::after {
+            right: -5px;
+            content: "A";
+        }
+
+        #positionMarker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 18px;
+            height: 18px;
+            border: 3px solid #11171b;
+            border-radius: 50%;
+            background: var(--accent);
+            transform: translate(-50%, -50%);
+            transition: left 180ms linear;
         }
 
         #status {
-            margin: 0;
+            min-height: 24px;
+            margin: 36px 0 0;
             color: var(--muted);
-            font-size: 14px;
+            line-height: 1.6;
         }
 
         #status.error {
-            color: #ff8b84;
+            color: #ff918b;
         }
 
-        @media (max-width: 620px) {
+        @media (max-width: 760px) {
             body {
-                padding: 18px;
+                padding: 16px;
                 place-items: start center;
             }
 
-            .motor-grid {
+            .dashboard {
                 grid-template-columns: 1fr;
             }
 
-            .motor-button {
-                min-height: 145px;
+            .panel {
+                padding: 16px;
             }
 
-            .footer-row {
-                align-items: flex-start;
-                flex-direction: column;
+            .motion-button,
+            .stop-button {
+                min-height: 92px;
+                font-size: 15px;
+            }
+
+            .direction-pad {
+                grid-template-columns: repeat(3, minmax(76px, 1fr));
+                gap: 9px;
             }
         }
     </style>
@@ -183,153 +297,244 @@
 <body>
     <main>
         <header>
-            <span class="eyebrow">Wheel GPIO Test Panel</span>
-            <h1>轮子电机控制</h1>
-            <p class="intro">按住按钮时，对应的 BOARD 物理引脚输出高电平；松开后恢复低电平。当前尚未标定四个轮子的安装方位。</p>
+            <span class="eyebrow">Differential Drive Control</span>
+            <h1>底盘控制</h1>
+            <p class="intro">方向按钮按住运行、松开停止。手动操作后位置按中点重新计算；自动到点以 B=0、A=1 建模，从中点到任一端预计 3 秒。</p>
         </header>
 
-        <section class="motor-grid" aria-label="轮子电机按钮">
-            <button class="motor-button" type="button" data-pin="26">
-                <span class="pin-label">BOARD GPIO</span>
-                <strong class="pin-number">26</strong>
-                <span class="motor-state">按住运行</span>
-            </button>
-            <button class="motor-button" type="button" data-pin="29">
-                <span class="pin-label">BOARD GPIO</span>
-                <strong class="pin-number">29</strong>
-                <span class="motor-state">按住运行</span>
-            </button>
-            <button class="motor-button" type="button" data-pin="31">
-                <span class="pin-label">BOARD GPIO</span>
-                <strong class="pin-number">31</strong>
-                <span class="motor-state">按住运行</span>
-            </button>
-            <button class="motor-button" type="button" data-pin="36">
-                <span class="pin-label">BOARD GPIO</span>
-                <strong class="pin-number">36</strong>
-                <span class="motor-state">按住运行</span>
-            </button>
-        </section>
+        <div class="dashboard">
+            <section class="panel">
+                <h2 class="panel-title">手动控制</h2>
+                <div class="direction-pad">
+                    <button class="motion-button" type="button" data-motion="forward">前进</button>
+                    <button class="motion-button" type="button" data-motion="backward">后退</button>
+                    <button class="motion-button" type="button" data-motion="turn-left">原地左旋</button>
+                    <button class="motion-button" type="button" data-motion="turn-right">原地右旋</button>
+                    <button id="stopAllButton" class="stop-button" type="button">全部停止</button>
+                </div>
+            </section>
 
-        <div class="footer-row">
-            <button id="stopAllButton" type="button">全部停止</button>
-            <p id="status" role="status">四路输出均为低电平。</p>
+            <section class="panel">
+                <h2 class="panel-title">自动到点</h2>
+                <div class="destination-grid">
+                    <button class="destination-button" type="button" data-destination="a">
+                        <strong>到 A 地</strong>
+                        <span>前进方向 · 坐标 1.0</span>
+                    </button>
+                    <button class="destination-button" type="button" data-destination="b">
+                        <strong>到 B 地</strong>
+                        <span>后退方向 · 坐标 0.0</span>
+                    </button>
+                </div>
+
+                <div class="position-card">
+                    <div class="position-head">
+                        <span>估算位置</span>
+                        <strong id="positionValue">0.5000</strong>
+                    </div>
+                    <div class="track" aria-label="B 地到 A 地的位置">
+                        <span id="positionMarker"></span>
+                    </div>
+                    <p id="status" role="status">底盘空闲，当前位置为中点。</p>
+                </div>
+            </section>
         </div>
     </main>
 
     <script>
-        const motorButtons = [...document.querySelectorAll(".motor-button")];
+        const motionButtons = [...document.querySelectorAll("[data-motion]")];
+        const destinationButtons = [...document.querySelectorAll("[data-destination]")];
         const stopAllButton = document.getElementById("stopAllButton");
-        const status = document.getElementById("status");
+        const positionValue = document.getElementById("positionValue");
+        const positionMarker = document.getElementById("positionMarker");
+        const statusElement = document.getElementById("status");
+
+        let activeMotion = null;
+        let commandQueue = Promise.resolve();
+        let latestState = null;
 
         function setStatus(message, isError = false) {
-            status.textContent = message;
-            status.classList.toggle("error", isError);
+            statusElement.textContent = message;
+            statusElement.classList.toggle("error", isError);
         }
 
-        async function sendCommand(url) {
-            const response = await fetch(url, { method: "POST" });
+        function queueCommand(command) {
+            commandQueue = commandQueue.catch(() => {}).then(command);
+            return commandQueue;
+        }
+
+        async function sendCommand(url, options = {}) {
+            const response = await fetch(url, { method: "POST", ...options });
             const result = await response.json();
             if (!response.ok || (result.code !== undefined && result.code !== 200)) {
-                throw new Error(result.message || "控制请求失败");
+                const error = new Error(result.message || "控制请求失败");
+                error.state = result.data;
+                throw error;
             }
             return result;
         }
 
-        function setButtonRunning(button, running) {
-            button.dataset.running = running ? "1" : "0";
-            button.classList.toggle("running", running);
-            button.querySelector(".motor-state").textContent = running ? "高电平输出中" : "按住运行";
-        }
+        function renderState(state) {
+            if (!state) return;
+            latestState = state;
 
-        function queueButtonCommand(button, command) {
-            const previous = button.commandQueue || Promise.resolve();
-            button.commandQueue = previous.catch(() => {}).then(command);
-            return button.commandQueue;
-        }
+            const position = Math.max(0, Math.min(1, Number(state.position) || 0));
+            positionValue.textContent = position.toFixed(4);
+            positionMarker.style.left = `${position * 100}%`;
 
-        function startMotor(button) {
-            if (button.dataset.running === "1") return;
-
-            const pin = button.dataset.pin;
-            setButtonRunning(button, true);
-            setStatus(`正在启动 GPIO ${pin}...`);
-            queueButtonCommand(button, async () => {
-                try {
-                    const result = await sendCommand(`/api/wheels/${pin}/start`);
-                    if (button.dataset.running === "1") {
-                        setStatus(result.message || `GPIO ${pin} 正在输出高电平。`);
-                    }
-                } catch (error) {
-                    setButtonRunning(button, false);
-                    setStatus(error.message, true);
-                }
+            const busy = Boolean(state.busy);
+            motionButtons.forEach(button => {
+                const isActive = state.mode === "manual" && state.motion === button.dataset.motion;
+                button.classList.toggle("running", isActive);
+                button.disabled = busy && !isActive;
             });
-        }
-
-        function stopMotor(button) {
-            if (button.dataset.running !== "1") return;
-
-            const pin = button.dataset.pin;
-            setButtonRunning(button, false);
-            setStatus(`正在停止 GPIO ${pin}...`);
-            queueButtonCommand(button, async () => {
-                try {
-                    const result = await sendCommand(`/api/wheels/${pin}/stop`);
-                    if (button.dataset.running !== "1") {
-                        setStatus(result.message || `GPIO ${pin} 已恢复低电平。`);
-                    }
-                } catch (error) {
-                    setStatus(error.message, true);
-                }
+            destinationButtons.forEach(button => {
+                button.disabled = busy;
             });
-        }
 
-        async function stopAll() {
-            motorButtons.forEach(button => setButtonRunning(button, false));
-            try {
-                await Promise.allSettled(motorButtons.map(button => button.commandQueue));
-                const result = await sendCommand("/api/wheels/stop-all");
-                setStatus(result.message || "四路轮子电机已全部停止。");
-            } catch (error) {
-                setStatus(error.message, true);
+            if (state.mode === "automatic") {
+                const target = (state.destination || "").toUpperCase();
+                setStatus(`正在前往 ${target} 地，预计剩余 ${Number(state.remaining_seconds).toFixed(2)} 秒。`);
+            } else if (state.mode === "manual") {
+                setStatus(`正在执行手动动作：${motionLabel(state.motion)}。松开按钮后停止，位置已重置为中点。`);
+            } else {
+                setStatus(`底盘空闲，当前估算坐标 ${position.toFixed(4)}。`);
             }
         }
 
-        motorButtons.forEach(button => {
+        function motionLabel(motion) {
+            return {
+                "forward": "前进",
+                "backward": "后退",
+                "turn-left": "原地左旋",
+                "turn-right": "原地右旋"
+            }[motion] || motion;
+        }
+
+        function startManual(button) {
+            if (activeMotion || latestState?.busy) return;
+
+            const motion = button.dataset.motion;
+            activeMotion = motion;
+            button.classList.add("running");
+            motionButtons.forEach(other => {
+                if (other !== button) other.disabled = true;
+            });
+            destinationButtons.forEach(destination => destination.disabled = true);
+            setStatus(`正在启动：${motionLabel(motion)}...`);
+
+            queueCommand(async () => {
+                try {
+                    const result = await sendCommand(`/api/wheels/motions/${motion}/start`);
+                    renderState(result.data);
+                } catch (error) {
+                    activeMotion = null;
+                    if (error.state) renderState(error.state);
+                    setStatus(error.message, true);
+                    await refreshState();
+                }
+            });
+        }
+
+        function stopManual(button) {
+            const motion = button.dataset.motion;
+            if (activeMotion !== motion) return;
+
+            activeMotion = null;
+            setStatus(`正在停止：${motionLabel(motion)}...`);
+            queueCommand(async () => {
+                try {
+                    const result = await sendCommand(`/api/wheels/motions/${motion}/stop`);
+                    renderState(result.data);
+                } catch (error) {
+                    setStatus(error.message, true);
+                    await refreshState();
+                }
+            });
+        }
+
+        function goToDestination(button) {
+            if (activeMotion || latestState?.busy) return;
+
+            const destination = button.dataset.destination;
+            setStatus(`正在启动前往 ${destination.toUpperCase()} 地...`);
+            queueCommand(async () => {
+                try {
+                    const result = await sendCommand(`/api/wheels/destinations/${destination}`);
+                    renderState(result.data);
+                    setStatus(result.message);
+                } catch (error) {
+                    if (error.state) renderState(error.state);
+                    setStatus(error.message, true);
+                    await refreshState();
+                }
+            });
+        }
+
+        function stopAll() {
+            activeMotion = null;
+            motionButtons.forEach(button => button.classList.remove("running"));
+            queueCommand(async () => {
+                try {
+                    const result = await sendCommand("/api/wheels/stop-all");
+                    renderState(result.data);
+                } catch (error) {
+                    setStatus(error.message, true);
+                }
+            });
+        }
+
+        async function refreshState() {
+            try {
+                const response = await fetch("/api/wheels/status");
+                const result = await response.json();
+                if (result.code === 200) renderState(result.data);
+            } catch (error) {
+                setStatus("无法读取底盘状态，请检查服务连接。", true);
+            }
+        }
+
+        motionButtons.forEach(button => {
             button.addEventListener("contextmenu", event => event.preventDefault());
             button.addEventListener("pointerdown", event => {
                 if (event.pointerType === "mouse" && event.button !== 0) return;
                 event.preventDefault();
                 button.setPointerCapture(event.pointerId);
-                startMotor(button);
+                startManual(button);
             });
             button.addEventListener("pointerup", event => {
                 event.preventDefault();
-                stopMotor(button);
+                stopManual(button);
             });
-            button.addEventListener("pointercancel", () => stopMotor(button));
-            button.addEventListener("lostpointercapture", () => stopMotor(button));
+            button.addEventListener("pointercancel", () => stopManual(button));
+            button.addEventListener("lostpointercapture", () => stopManual(button));
             button.addEventListener("keydown", event => {
                 if ((event.key === " " || event.key === "Enter") && !event.repeat) {
                     event.preventDefault();
-                    startMotor(button);
+                    startManual(button);
                 }
             });
             button.addEventListener("keyup", event => {
                 if (event.key === " " || event.key === "Enter") {
                     event.preventDefault();
-                    stopMotor(button);
+                    stopManual(button);
                 }
             });
+        });
+
+        destinationButtons.forEach(button => {
+            button.addEventListener("click", () => goToDestination(button));
         });
 
         stopAllButton.addEventListener("click", stopAll);
         window.addEventListener("blur", stopAll);
         window.addEventListener("pagehide", () => {
-            motorButtons.forEach(button => setButtonRunning(button, false));
+            activeMotion = null;
             navigator.sendBeacon("/api/wheels/stop-all");
         });
+
+        refreshState();
+        setInterval(refreshState, 500);
     </script>
 </body>
 </html>

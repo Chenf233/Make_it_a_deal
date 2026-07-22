@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     PORT: int = 8000
     CORS_ORIGINS: list[str] = ["*"] # 允许跨域的列表，开发环境暂设为全部
 
+    # --- 华为云 IoT C 子进程 ---
+    HUAWEI_IOT_ENABLED: bool = True
+    HUAWEI_IOT_EXECUTABLE: str = "services/huaweicloud-iot-device-sdk-c-master-mine/station_iotd"
+    HUAWEI_IOT_CONFIG: str = "services/huaweicloud-iot-device-sdk-c-master-mine/station_iotd.json"
+    HUAWEI_IOT_REQUEST_TIMEOUT: float = 5.0
+
     class Config:
         env_file = ".env"
 

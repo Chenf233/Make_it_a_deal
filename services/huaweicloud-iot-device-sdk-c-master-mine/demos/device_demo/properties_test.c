@@ -79,10 +79,10 @@ static void Test_PropertiesReport(void)
     ST_IOTA_SERVICE_DATA_INFO services[serviceNum];
 
     char service[100] = {0};
-    (void)sprintf_s(service, sizeof(service), "{\"A地日均包裹量 \": %d}", g_smoke_value); 
+    (void)sprintf_s(service, sizeof(service), "{\"A parcels per D\": %d}", g_smoke_value); 
     // --------------- the data of service-------------------------------
     services[0].event_time = GetEventTimesStamp(); // if event_time is set to NULL, the time will be the iot-platform's time.
-    services[0].service_id = "驿站1";
+    services[0].service_id = "Station_1";
     services[0].properties = service;
 
     int messageId = IOTA_PropertiesReport(services, serviceNum, 0, NULL);

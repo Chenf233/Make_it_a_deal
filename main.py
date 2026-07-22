@@ -18,6 +18,7 @@ from database.models import UserRepository
 from services.camera_manager import get_camera
 from services.face_recognition import FaceRecognizer
 from services.hardware_manager import init as init_cabinet_hardware, lock_all_cabinets
+from services.huawei_iot import huawei_iot
 from services.motor import stop_all_wheels
 from services.scanner import QRScanner
 
@@ -57,28 +58,39 @@ async def lifespan(app: FastAPI):
     # 启动时进行一次全量同步读取是安全的，它准备好了再对外提供服务
     active_users = UserRepository.get_all_active_faces()
     app_state.build_face_cache(active_users)
+
+    await huawei_iot.start()
+    logger.info("华为云 IoT 子进程管理器已启动。")
     logger.info("=== 系统启动完毕，准备接收请求 ===")
 
-    yield  # ---------------- 分界线：系统运行中 ----------------
-
-    logger.info("=== 系统正在关闭 ===")
-    # 4. 安全回收硬件资源
     try:
-        lock_all_cabinets()
-        logger.info("柜体电磁铁已恢复锁定。")
-    except Exception:
-        logger.exception("柜体硬件释放失败。")
+        yield  # ---------------- 分界线：系统运行中 ----------------
+    finally:
+        logger.info("=== 系统正在关闭 ===")
 
-    try:
-        stop_all_wheels()
-        logger.info("轮子电机 GPIO 已全部恢复低电平。")
-    except Exception:
-        logger.exception("轮子电机停止失败。")
+        try:
+            stop_all_wheels()
+            await wheel_api.cancel_automatic_tasks()
+            logger.info("轮子电机 GPIO 已全部恢复低电平。")
+        except Exception:
+            logger.exception("轮子电机停止失败。")
 
-    if app_state.camera:
-        app_state.camera.stop()
-        logger.info("摄像头线程已安全释放。")
-    logger.info("=== 系统已安全退出 ===")
+        try:
+            await huawei_iot.stop()
+            logger.info("华为云 IoT 子进程已停止。")
+        except Exception:
+            logger.exception("华为云 IoT 子进程停止失败。")
+
+        try:
+            lock_all_cabinets()
+            logger.info("柜体电磁铁已恢复锁定。")
+        except Exception:
+            logger.exception("柜体硬件释放失败。")
+
+        if app_state.camera:
+            app_state.camera.stop()
+            logger.info("摄像头线程已安全释放。")
+        logger.info("=== 系统已安全退出 ===")
 
 
 # 实例化 FastAPI 应用

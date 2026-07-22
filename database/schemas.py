@@ -67,3 +67,7 @@ class FaceAuthResult(BaseModel):
     has_forgotten_parcels: bool = Field(False, description="出门时判定是否有漏拿的在库包裹")
     exit_expected_total: Optional[int] = Field(None, description="出口模式：应取包裹总数")
     exit_picked_count: Optional[int] = Field(None, description="出口模式：已取包裹数")
+
+
+class StationCounterSet(BaseModel):
+    value: int = Field(..., ge=0, le=2147483647, description="设置后的站点累计值")
