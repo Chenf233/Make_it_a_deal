@@ -27,6 +27,7 @@ OBJS += $(DEVICE_RULE_OBJS)
 
 
 LIBS = $(LIB_PATH) -lpaho-mqtt3as -lssl -lcrypto -lz -lboundscheck -lpthread -lcurl -lm
+STATION_IOTD = station_iotd
 #$(LIB_PATH) -lHWMQTT
 #$(LIB_PATH) -lpaho-mqtt3cs $(LIB_PATH)
 
@@ -88,6 +89,9 @@ endif
 
 $(TARGET): $(OBJ_DIRS) $(OUT_PATH)/device_demo.o $(OBJS)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OUT_PATH)/device_demo.o $(OBJS)  $(LIBS)
+
+$(STATION_IOTD): $(OBJ_DIRS) $(OUT_PATH)/station_iotd.o $(OBJS)
+	$(CC) $(CFLAGS) -Wl,--enable-new-dtags -Wl,-z,origin -Wl,-rpath,'$$ORIGIN/lib' -o $@ $(OUT_PATH)/station_iotd.o $(OBJS) $(LIBS)
 
 gateway_server_test: $(OBJ_DIRS) $(OUT_PATH)/generic_tcp_protocol.o $(OUT_PATH)/gateway_server_test.o $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OUT_PATH)/generic_tcp_protocol.o $(OUT_PATH)/gateway_server_test.o $(OBJS) $(LIBS)
@@ -234,6 +238,9 @@ $(OUT_PATH)/gateway_client_test.o: $(SRC_PATH)/../demos/gateway_demo/gateway_cli
 
 $(OUT_PATH)/device_demo.o: $(SRC_PATH)/device_demo/device_demo.c
 	$(CC) $(CFLAGS) -c $< -o $@ $(HEADER_PATH)/agentlite/ $(HEADER_PATH)/service/ $(HEADER_PATH)/util/ $(HEADER_PATH)/third_party/cjson/ $(HEADER_PATH)/third_party/libboundscheck/ $(HEADER_PATH)/service/device_rule/  $(HEADER_PATH) $(HEADER_PATH)/tunnel/ $(HEADER_PATH)/nopoll
+
+$(OUT_PATH)/station_iotd.o: $(SRC_PATH)/station_iotd/station_iotd.c
+	$(CC) $(CFLAGS) -c $< -o $@ $(HEADER_PATH)/agentlite/ $(HEADER_PATH)/util/ $(HEADER_PATH)/third_party/cjson/ $(HEADER_PATH)
 	
 ##--------------bridge--------------##
 $(OUT_PATH)/bridge_tcp_protocol.o: $(SRC_PATH)/../demos/bridge_demo/bridge_tcp_protocol.c
@@ -369,7 +376,7 @@ SOFT_BUS_TEST += soft_bus_test
 endif
 
 .PHONY: all
-all:	$(TARGET) $(BOOTSTREP_TEST) $(DEVICE_TEST) $(BRIDGE_TEST) $(GATEWAY_TEST) $(SOFT_BUS_TEST)
+all:	$(TARGET) $(STATION_IOTD) $(BOOTSTREP_TEST) $(DEVICE_TEST) $(BRIDGE_TEST) $(GATEWAY_TEST) $(SOFT_BUS_TEST)
 
 
 .PHONY: bootstrap_demo
@@ -394,7 +401,7 @@ $(OBJ_DIRS):
 	mkdir -p $@
 
 clean:
-	rm -f $(TARGET) $(BOOTSTREP_TEST) $(DEVICE_TEST) $(GATEWAY_TEST) $(BRIDGE_TEST) $(SOFT_BUS_TEST)
+	rm -f $(TARGET) $(STATION_IOTD) $(BOOTSTREP_TEST) $(DEVICE_TEST) $(GATEWAY_TEST) $(BRIDGE_TEST) $(SOFT_BUS_TEST)
 	rm -f bootstrap_demo
 	rm -rf ./out
 

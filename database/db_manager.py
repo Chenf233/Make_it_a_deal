@@ -68,4 +68,17 @@ class DatabaseManager:
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             ''')
+
+            # 4. 华为云站点累计值（单例行）
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS station_counters (
+                    singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                    counter_a INTEGER NOT NULL DEFAULT 0 CHECK (counter_a BETWEEN 0 AND 2147483647),
+                    counter_b INTEGER NOT NULL DEFAULT 0 CHECK (counter_b BETWEEN 0 AND 2147483647)
+                )
+            ''')
+            cursor.execute('''
+                INSERT OR IGNORE INTO station_counters (singleton_id, counter_a, counter_b)
+                VALUES (1, 0, 0)
+            ''')
             conn.commit()

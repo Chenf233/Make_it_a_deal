@@ -367,3 +367,78 @@ class AccessLogRepository:
             cursor.execute('DELETE FROM access_logs WHERE user_id = ?', (user_id,))
             conn.commit()
             return cursor.rowcount > 0
+
+
+class StationCounterRepository:
+    _COLUMNS = {
+        "a": "counter_a",
+        "b": "counter_b",
+    }
+
+    @staticmethod
+    def _row_to_dict(row) -> dict:
+        return {
+            "counter_a": row["counter_a"],
+            "counter_b": row["counter_b"],
+        }
+
+    @classmethod
+    def get_counters(cls) -> dict:
+        with DatabaseManager.get_connection() as conn:
+            row = conn.execute('''
+                SELECT counter_a, counter_b
+                FROM station_counters
+                WHERE singleton_id = 1
+            ''').fetchone()
+            if row is None:
+                raise RuntimeError("站点计数器尚未初始化")
+            return cls._row_to_dict(row)
+
+    @classmethod
+    def set_counter(cls, station: str, value: int) -> dict:
+        column = cls._COLUMNS.get(station.lower())
+        if column is None:
+            raise ValueError(f"未知站点：{station}")
+        if value < 0 or value > 2147483647:
+            raise ValueError("站点累计值必须位于 0 到 2147483647 之间")
+
+        with DatabaseManager.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"UPDATE station_counters SET {column} = ? WHERE singleton_id = 1",
+                (value,),
+            )
+            cursor.execute('''
+                SELECT counter_a, counter_b
+                FROM station_counters
+                WHERE singleton_id = 1
+            ''')
+            row = cursor.fetchone()
+            conn.commit()
+            return cls._row_to_dict(row)
+
+    @classmethod
+    def increment_counter(cls, station: str) -> dict:
+        column = cls._COLUMNS.get(station.lower())
+        if column is None:
+            raise ValueError(f"未知站点：{station}")
+
+        with DatabaseManager.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT {column} FROM station_counters WHERE singleton_id = 1"
+            )
+            current = cursor.fetchone()[column]
+            if current >= 2147483647:
+                raise OverflowError("站点累计值已达到最大值，请先通过设置接口调整")
+            cursor.execute(
+                f"UPDATE station_counters SET {column} = {column} + 1 WHERE singleton_id = 1"
+            )
+            cursor.execute('''
+                SELECT counter_a, counter_b
+                FROM station_counters
+                WHERE singleton_id = 1
+            ''')
+            row = cursor.fetchone()
+            conn.commit()
+            return cls._row_to_dict(row)

@@ -1,0 +1,7 @@
+{
+  "work_path": "/absolute/path/to/huaweicloud-iot-device-sdk-c-master-mine",
+  "address": "your-iotda-device-endpoint",
+  "port": "8883",
+  "device_id": "your-device-id",
+  "secret": "your-device-secret"
+}
