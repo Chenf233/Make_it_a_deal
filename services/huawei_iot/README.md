@@ -72,8 +72,10 @@ POST /api/iot/daily-sync  {"business_date":"2026-07-22","force":true}
 GET /api/iot/status
 ```
 
-Picked-up parcels are counted by `target_location` for each Asia/Shanghai
-business date. After midnight, Python reports the previous day's values to
+Before each automatic or manual report, Python recalculates picked-up parcels
+from `parcels.status`, `parcels.out_time`, and `target_location` for the target
+Asia/Shanghai business date. This allows backend demonstration edits to be
+reflected by a forced report. After midnight, Python reports the previous day's values to
 `Station_1` using `A_parcels_per_D` and `B_parcels_per_D`. Startup retries
 unfinished historical reports. The manual sync endpoint is intended for
 diagnostics and only accepts completed business dates.

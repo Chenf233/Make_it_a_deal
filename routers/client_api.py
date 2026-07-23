@@ -29,6 +29,7 @@ def build_parcel_out(p: dict) -> ParcelOut:
         company=extra.get("company", "未知"),
         receiver_name=extra.get("receiver_name", "未知"),
         receiver_phone=p["receiver_phone"],
+        target_location=p["target_location"],
         cabinet_number=p["cabinet_number"],   # 修复：之前遗漏此字段
         status=p["status"],
         in_time=p["in_time"],

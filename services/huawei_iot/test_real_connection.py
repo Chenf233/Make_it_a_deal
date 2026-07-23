@@ -54,7 +54,7 @@ class HuaweiIoTRealConnectionTests(unittest.IsolatedAsyncioTestCase):
 
         DatabaseManager.init_db()
         yesterday = datetime.now(ZoneInfo(settings.HUAWEI_IOT_BUSINESS_TIMEZONE)).date() - timedelta(days=1)
-        self.counters = ParcelDailyCounterRepository.ensure_date(yesterday)
+        self.counters = ParcelDailyCounterRepository.refresh_snapshot(yesterday)
         self.stderr_lines = deque(maxlen=100)
         self.seen_messages = []
         self.process = await asyncio.create_subprocess_exec(

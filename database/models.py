@@ -1,6 +1,6 @@
 import json
 import random
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 import numpy as np
 from database.db_manager import DatabaseManager
@@ -173,7 +173,8 @@ class ParcelRepository:
         if target_location not in {"A", "B"}:
             raise ValueError("包裹目标类别必须是 A 或 B")
         extra_str = json.dumps(extra_info or {})
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
+        out_time = now_str if status == 2 else None
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             if not cabinet_number:
@@ -184,10 +185,10 @@ class ParcelRepository:
             cursor.execute('''
                 INSERT INTO parcels (
                     tracking_no, pickup_code, cabinet_number, receiver_phone,
-                    target_location, status, extra_info, in_time
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    target_location, status, extra_info, in_time, out_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (tracking_no, pickup_code, cabinet_number, receiver_phone,
-                  target_location, status, extra_str, now_str))
+                  target_location, status, extra_str, now_str, out_time))
             conn.commit()
             new_id = cursor.lastrowid
             # 查询完整信息返回
@@ -273,10 +274,9 @@ class ParcelRepository:
             return cursor.rowcount > 0
 
     @staticmethod
-    def complete_pickup_and_increment(parcel_id: int, now: datetime | None = None) -> dict | None:
+    def complete_pickup(parcel_id: int, now: datetime | None = None) -> dict | None:
         now = now or datetime.now(ZoneInfo("Asia/Shanghai"))
         out_time = now.strftime("%Y-%m-%d %H:%M:%S")
-        business_date = now.date().isoformat()
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             row = cursor.execute(
@@ -286,34 +286,16 @@ class ParcelRepository:
             if row is None:
                 return None
             target_location = row["target_location"]
-            column = "target_a_count" if target_location == "A" else "target_b_count"
             cursor.execute(
                 "UPDATE parcels SET status = 2, out_time = ? WHERE parcel_id = ? AND status = 1",
                 (out_time, parcel_id),
             )
             if cursor.rowcount != 1:
                 return None
-            cursor.execute('''
-                INSERT INTO parcel_daily_counters (business_date)
-                VALUES (?) ON CONFLICT(business_date) DO NOTHING
-            ''', (business_date,))
-            cursor.execute(f'''
-                UPDATE parcel_daily_counters
-                SET {column} = {column} + 1,
-                    report_status = 'pending', published_at = NULL,
-                    last_error = NULL, updated_at = CURRENT_TIMESTAMP
-                WHERE business_date = ?
-            ''', (business_date,))
-            counts = cursor.execute('''
-                SELECT target_a_count, target_b_count
-                FROM parcel_daily_counters WHERE business_date = ?
-            ''', (business_date,)).fetchone()
             conn.commit()
             return {
-                "business_date": business_date,
                 "target_location": target_location,
-                "target_a_count": counts["target_a_count"],
-                "target_b_count": counts["target_b_count"],
+                "out_time": out_time,
             }
 
     @staticmethod
@@ -355,21 +337,30 @@ class ParcelRepository:
                 raise ValueError("包裹目标类别必须是 A 或 B")
             set_parts.append("target_location = ?")
             params.append(target_location)
-        if status is not None:
-            set_parts.append("status = ?")
-            params.append(status)
-            if status == 2:
-                set_parts.append("out_time = ?")
-                params.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         if extra_info is not None:
             set_parts.append("extra_info = ?")
             params.append(json.dumps(extra_info))
-        if not set_parts:
-            return False
-        sql = f"UPDATE parcels SET {', '.join(set_parts)} WHERE parcel_id = ?"
-        params.append(parcel_id)
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
+            if status is not None:
+                current = cursor.execute(
+                    "SELECT status, out_time FROM parcels WHERE parcel_id = ?", (parcel_id,)
+                ).fetchone()
+                if current is None:
+                    return False
+                set_parts.append("status = ?")
+                params.append(status)
+                if status == 2 and current["status"] != 2:
+                    set_parts.append("out_time = ?")
+                    params.append(
+                        datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
+                    )
+                elif status != 2 and current["out_time"] is not None:
+                    set_parts.append("out_time = NULL")
+            if not set_parts:
+                return False
+            sql = f"UPDATE parcels SET {', '.join(set_parts)} WHERE parcel_id = ?"
+            params.append(parcel_id)
             cursor.execute(sql, params)
             conn.commit()
             return cursor.rowcount > 0
@@ -431,6 +422,38 @@ class AccessLogRepository:
             return cursor.rowcount > 0
 
 class ParcelDailyCounterRepository:
+    @staticmethod
+    def refresh_snapshot(business_date: date | str) -> dict:
+        value = business_date.isoformat() if isinstance(business_date, date) else business_date
+        start = f"{value} 00:00:00"
+        end = f"{date.fromisoformat(value) + timedelta(days=1)} 00:00:00"
+        with DatabaseManager.get_connection() as conn:
+            counts = conn.execute('''
+                SELECT
+                    COALESCE(SUM(CASE WHEN target_location = 'A' THEN 1 ELSE 0 END), 0) AS target_a_count,
+                    COALESCE(SUM(CASE WHEN target_location = 'B' THEN 1 ELSE 0 END), 0) AS target_b_count
+                FROM parcels
+                WHERE status = 2 AND out_time >= ? AND out_time < ?
+            ''', (start, end)).fetchone()
+            conn.execute('''
+                INSERT INTO parcel_daily_counters (
+                    business_date, target_a_count, target_b_count,
+                    report_status, published_at, last_error
+                ) VALUES (?, ?, ?, 'pending', NULL, NULL)
+                ON CONFLICT(business_date) DO UPDATE SET
+                    target_a_count = excluded.target_a_count,
+                    target_b_count = excluded.target_b_count,
+                    report_status = 'pending',
+                    published_at = NULL,
+                    last_error = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+            ''', (value, counts["target_a_count"], counts["target_b_count"]))
+            row = conn.execute(
+                "SELECT * FROM parcel_daily_counters WHERE business_date = ?", (value,)
+            ).fetchone()
+            conn.commit()
+            return dict(row)
+
     @staticmethod
     def ensure_date(business_date: date | str) -> dict:
         value = business_date.isoformat() if isinstance(business_date, date) else business_date

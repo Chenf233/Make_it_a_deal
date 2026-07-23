@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import uuid
 from contextlib import suppress
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -36,13 +37,16 @@ class DailyParcelReportService:
         if business_date >= self.today():
             raise ValueError("只能同步已经结束的业务日期")
         async with self._sync_lock:
-            row = await asyncio.to_thread(ParcelDailyCounterRepository.ensure_date, business_date)
-            if row["report_status"] == "published" and not force:
-                return {**row, "queued": False, "reason": "already_published"}
+            existing = await asyncio.to_thread(ParcelDailyCounterRepository.get, business_date)
+            if existing and existing["report_status"] == "published" and not force:
+                return {**existing, "queued": False, "reason": "already_published"}
             if not settings.HUAWEI_IOT_ENABLED:
                 raise RuntimeError("华为云 IoT 已禁用")
 
-            request_id = f"daily-{business_date.isoformat()}"
+            row = await asyncio.to_thread(
+                ParcelDailyCounterRepository.refresh_snapshot, business_date
+            )
+            request_id = f"daily-{business_date.isoformat()}-{uuid.uuid4().hex}"
             await asyncio.to_thread(ParcelDailyCounterRepository.mark_publishing, business_date.isoformat())
             try:
                 await huawei_iot.report_properties(
@@ -60,15 +64,17 @@ class DailyParcelReportService:
                     ParcelDailyCounterRepository.mark_failed, business_date.isoformat(), str(exc)
                 )
                 raise
+            published = await asyncio.to_thread(ParcelDailyCounterRepository.get, business_date)
             return {
-                **await asyncio.to_thread(ParcelDailyCounterRepository.get, business_date),
+                **(published or row),
                 "queued": True,
                 "request_id": request_id,
             }
 
     async def sync_pending(self):
         yesterday = self.today() - timedelta(days=1)
-        await asyncio.to_thread(ParcelDailyCounterRepository.ensure_date, yesterday)
+        if await asyncio.to_thread(ParcelDailyCounterRepository.get, yesterday) is None:
+            await asyncio.to_thread(ParcelDailyCounterRepository.ensure_date, yesterday)
         rows = await asyncio.to_thread(
             ParcelDailyCounterRepository.list_before, self.today(), True
         )

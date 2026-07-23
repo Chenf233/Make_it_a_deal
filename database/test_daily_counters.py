@@ -2,7 +2,7 @@ import tempfile
 import unittest
 import sys
 import types
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -39,20 +39,27 @@ class ParcelDailyCounterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ParcelRepository.add_parcel("missing-target", receiver_phone="13800000000")
 
-    def test_pickup_increments_once_for_target(self):
+    def test_snapshot_recomputes_after_backend_edits(self):
         parcel = ParcelRepository.add_parcel(
             "target-a", receiver_phone="13800000000", target_location="A"
         )
         now = datetime(2026, 7, 23, 23, 59, tzinfo=ZoneInfo("Asia/Shanghai"))
 
-        result = ParcelRepository.complete_pickup_and_increment(parcel["parcel_id"], now)
-        duplicate = ParcelRepository.complete_pickup_and_increment(parcel["parcel_id"], now)
+        result = ParcelRepository.complete_pickup(parcel["parcel_id"], now)
+        duplicate = ParcelRepository.complete_pickup(parcel["parcel_id"], now)
+        first = ParcelDailyCounterRepository.refresh_snapshot(date(2026, 7, 23))
 
-        self.assertEqual(result["target_a_count"], 1)
-        self.assertEqual(result["target_b_count"], 0)
+        self.assertEqual(result["target_location"], "A")
         self.assertIsNone(duplicate)
-        row = ParcelDailyCounterRepository.get("2026-07-23")
-        self.assertEqual((row["target_a_count"], row["target_b_count"]), (1, 0))
+        self.assertEqual((first["target_a_count"], first["target_b_count"]), (1, 0))
+
+        ParcelRepository.update_parcel(parcel["parcel_id"], target_location="B")
+        second = ParcelDailyCounterRepository.refresh_snapshot(date(2026, 7, 23))
+        self.assertEqual((second["target_a_count"], second["target_b_count"]), (0, 1))
+
+        ParcelRepository.update_parcel(parcel["parcel_id"], status=1)
+        third = ParcelDailyCounterRepository.refresh_snapshot(date(2026, 7, 23))
+        self.assertEqual((third["target_a_count"], third["target_b_count"]), (0, 0))
 
     def test_existing_schema_drops_legacy_parcels(self):
         with DatabaseManager.get_connection() as conn:

@@ -23,10 +23,7 @@ WHEEL_PINS = (
     RIGHT_BACKWARD_PIN,
 )
 
-POSITION_B = 0.0
-POSITION_MIDDLE = 0.5
-POSITION_A = 1.0
-FULL_TRAVEL_SECONDS = 6.0
+AUTOMATIC_PHASE_SECONDS = 3.0
 
 
 class WheelMotion(str, Enum):
@@ -39,6 +36,19 @@ class WheelMotion(str, Enum):
 class WheelDestination(str, Enum):
     A = "a"
     B = "b"
+
+
+class WheelLocation(str, Enum):
+    LOGISTICS_CENTER = "logistics_center"
+    STATION_1 = "station_1"
+    STATION_2 = "station_2"
+    UNKNOWN = "unknown"
+
+
+class WheelPhase(str, Enum):
+    OUTBOUND = "outbound"
+    DWELL = "dwell"
+    RETURNING = "returning"
 
 
 class WheelBusyError(RuntimeError):
@@ -56,12 +66,17 @@ _initialized = False
 _wheel_lock = threading.Lock()
 _wheel_motion = None
 _wheel_mode = None
-_wheel_position = POSITION_MIDDLE
+_wheel_location = WheelLocation.LOGISTICS_CENTER
 _wheel_destination = None
-_auto_start_position = None
-_auto_started_at = None
-_auto_duration = None
+_wheel_phase = None
+_phase_started_at = None
+_phase_duration = None
 _motion_token = 0
+_cycle_id = None
+_cycle_sequence = 0
+_arrival_id = None
+_arrival_sequence = 0
+_requires_homing = False
 
 def init():
     global _initialized
@@ -155,30 +170,33 @@ def _set_wheel_outputs(high_pins=()):
         GPIO.output(pin, GPIO.HIGH)
 
 
-def _estimated_position_locked():
-    if _wheel_mode != "automatic" or not _auto_duration:
-        return _wheel_position
-
-    elapsed = max(0.0, time.monotonic() - _auto_started_at)
-    progress = min(1.0, elapsed / _auto_duration)
-    target = POSITION_A if _wheel_destination == WheelDestination.A else POSITION_B
-    return _auto_start_position + (target - _auto_start_position) * progress
-
-
 def _status_locked():
-    position = _estimated_position_locked()
     remaining_seconds = 0.0
-    if _wheel_mode == "automatic" and _auto_duration:
-        elapsed = max(0.0, time.monotonic() - _auto_started_at)
-        remaining_seconds = max(0.0, _auto_duration - elapsed)
+    if (
+        _wheel_mode == "automatic"
+        and _phase_duration is not None
+        and _phase_started_at is not None
+    ):
+        elapsed = max(0.0, time.monotonic() - _phase_started_at)
+        remaining_seconds = max(0.0, _phase_duration - elapsed)
 
     return {
         "mode": _wheel_mode,
         "motion": _wheel_motion.value if _wheel_motion else None,
-        "destination": _wheel_destination.value if _wheel_destination else None,
-        "position": round(position, 4),
-        "remaining_seconds": round(remaining_seconds, 2),
-        "busy": _wheel_motion is not None,
+        "destination": (
+            WheelLocation.STATION_1.value
+            if _wheel_destination == WheelDestination.A
+            else WheelLocation.STATION_2.value
+            if _wheel_destination == WheelDestination.B
+            else None
+        ),
+        "phase": _wheel_phase.value if _wheel_phase else None,
+        "location": _wheel_location.value,
+        "phase_remaining_seconds": round(remaining_seconds, 2),
+        "busy": _wheel_mode is not None,
+        "cycle_id": _cycle_id,
+        "arrival_id": _arrival_id,
+        "requires_homing": _requires_homing,
     }
 
 
@@ -188,31 +206,33 @@ def get_wheel_status():
 
 
 def start_manual_motion(motion):
-    global _wheel_motion, _wheel_mode, _wheel_position, _wheel_destination
-    global _auto_start_position, _auto_started_at, _auto_duration, _motion_token
+    global _wheel_motion, _wheel_mode, _wheel_location, _wheel_destination
+    global _wheel_phase, _phase_started_at, _phase_duration, _motion_token
+    global _requires_homing
 
     init()
     motion = WheelMotion(motion)
     with _wheel_lock:
-        if _wheel_motion is not None:
+        if _wheel_mode is not None:
             if _wheel_mode == "manual" and _wheel_motion == motion:
                 return _status_locked()
-            raise WheelBusyError(f"底盘正在执行 {_wheel_motion.value}，请先停止当前动作")
+            raise WheelBusyError("底盘正在执行其他动作，请先停止当前动作")
 
         _set_wheel_outputs(MOTION_PINS[motion])
         _wheel_motion = motion
         _wheel_mode = "manual"
-        _wheel_position = POSITION_MIDDLE
+        _wheel_location = WheelLocation.UNKNOWN
         _wheel_destination = None
-        _auto_start_position = None
-        _auto_started_at = None
-        _auto_duration = None
+        _wheel_phase = None
+        _phase_started_at = None
+        _phase_duration = None
+        _requires_homing = True
         _motion_token += 1
         return _status_locked()
 
 
 def stop_manual_motion(motion):
-    global _wheel_motion, _wheel_mode, _motion_token
+    global _wheel_motion, _wheel_mode, _wheel_location, _requires_homing, _motion_token
 
     init()
     motion = WheelMotion(motion)
@@ -223,89 +243,147 @@ def stop_manual_motion(motion):
         _set_wheel_outputs()
         _wheel_motion = None
         _wheel_mode = None
+        _wheel_location = WheelLocation.UNKNOWN
+        _requires_homing = True
         _motion_token += 1
         return True, _status_locked()
 
 
 def start_destination(destination):
-    global _wheel_motion, _wheel_mode, _wheel_position, _wheel_destination
-    global _auto_start_position, _auto_started_at, _auto_duration, _motion_token
+    global _wheel_motion, _wheel_mode, _wheel_location, _wheel_destination
+    global _wheel_phase, _phase_started_at, _phase_duration, _motion_token
+    global _cycle_id, _cycle_sequence
 
     init()
     destination = WheelDestination(destination)
-    target = POSITION_A if destination == WheelDestination.A else POSITION_B
 
     with _wheel_lock:
-        if _wheel_motion is not None:
-            raise WheelBusyError(f"底盘正在执行 {_wheel_motion.value}，请先停止当前动作")
+        if _wheel_mode is not None:
+            raise WheelBusyError("底盘正在执行其他动作，请先停止当前动作")
+        if _requires_homing:
+            raise WheelBusyError("底盘位置未知，请先确认底盘位于物流中心")
+        if _wheel_location != WheelLocation.LOGISTICS_CENTER:
+            raise WheelBusyError("自动任务只能从物流中心启动")
 
-        distance = abs(target - _wheel_position)
-        duration = distance * FULL_TRAVEL_SECONDS
-        if duration <= 0.001:
-            _wheel_position = target
-            return {"token": None, "duration_seconds": 0.0, "status": _status_locked()}
-
-        motion = WheelMotion.FORWARD if target > _wheel_position else WheelMotion.BACKWARD
+        motion = (
+            WheelMotion.FORWARD
+            if destination == WheelDestination.A
+            else WheelMotion.BACKWARD
+        )
         _set_wheel_outputs(MOTION_PINS[motion])
         _wheel_motion = motion
         _wheel_mode = "automatic"
+        _wheel_location = WheelLocation.UNKNOWN
         _wheel_destination = destination
-        _auto_start_position = _wheel_position
-        _auto_started_at = time.monotonic()
-        _auto_duration = duration
+        _wheel_phase = WheelPhase.OUTBOUND
+        _phase_started_at = time.monotonic()
+        _phase_duration = AUTOMATIC_PHASE_SECONDS
         _motion_token += 1
+        _cycle_sequence += 1
+        _cycle_id = _cycle_sequence
         return {
             "token": _motion_token,
-            "duration_seconds": round(duration, 3),
+            "phase_duration_seconds": AUTOMATIC_PHASE_SECONDS,
             "status": _status_locked(),
         }
 
 
-def complete_destination(token):
-    global _wheel_motion, _wheel_mode, _wheel_position, _wheel_destination
-    global _auto_start_position, _auto_started_at, _auto_duration, _motion_token
+def advance_automatic_phase(token, expected_phase):
+    global _wheel_motion, _wheel_mode, _wheel_location, _wheel_destination
+    global _wheel_phase, _phase_started_at, _phase_duration, _motion_token
+    global _arrival_id, _arrival_sequence
 
     init()
+    expected_phase = WheelPhase(expected_phase)
     with _wheel_lock:
-        if token != _motion_token or _wheel_mode != "automatic":
+        if (
+            token != _motion_token
+            or _wheel_mode != "automatic"
+            or _wheel_phase != expected_phase
+        ):
             return False, _status_locked()
 
-        _set_wheel_outputs()
-        _wheel_position = POSITION_A if _wheel_destination == WheelDestination.A else POSITION_B
-        _wheel_motion = None
-        _wheel_mode = None
-        _wheel_destination = None
-        _auto_start_position = None
-        _auto_started_at = None
-        _auto_duration = None
-        _motion_token += 1
+        if expected_phase == WheelPhase.OUTBOUND:
+            _set_wheel_outputs()
+            _wheel_motion = None
+            _wheel_phase = WheelPhase.DWELL
+            _wheel_location = (
+                WheelLocation.STATION_1
+                if _wheel_destination == WheelDestination.A
+                else WheelLocation.STATION_2
+            )
+            _arrival_sequence += 1
+            _arrival_id = _arrival_sequence
+        elif expected_phase == WheelPhase.DWELL:
+            _wheel_motion = (
+                WheelMotion.BACKWARD
+                if _wheel_destination == WheelDestination.A
+                else WheelMotion.FORWARD
+            )
+            _set_wheel_outputs(MOTION_PINS[_wheel_motion])
+            _wheel_phase = WheelPhase.RETURNING
+            _wheel_location = WheelLocation.UNKNOWN
+        else:
+            _set_wheel_outputs()
+            _wheel_motion = None
+            _wheel_mode = None
+            _wheel_location = WheelLocation.LOGISTICS_CENTER
+            _wheel_destination = None
+            _wheel_phase = None
+            _phase_started_at = None
+            _phase_duration = None
+            _arrival_sequence += 1
+            _arrival_id = _arrival_sequence
+            _motion_token += 1
+            return True, _status_locked()
+
+        _phase_started_at = time.monotonic()
+        _phase_duration = AUTOMATIC_PHASE_SECONDS
         return True, _status_locked()
 
 
 def stop_all_wheels():
-    global _wheel_motion, _wheel_mode, _wheel_position, _wheel_destination
-    global _auto_start_position, _auto_started_at, _auto_duration, _motion_token
+    global _wheel_motion, _wheel_mode, _wheel_location, _wheel_destination
+    global _wheel_phase, _phase_started_at, _phase_duration, _motion_token
+    global _requires_homing
 
     init()
     with _wheel_lock:
-        if _wheel_mode == "automatic":
-            _wheel_position = _estimated_position_locked()
+        had_activity = _wheel_mode is not None
         _set_wheel_outputs()
         _wheel_motion = None
         _wheel_mode = None
         _wheel_destination = None
-        _auto_start_position = None
-        _auto_started_at = None
-        _auto_duration = None
+        _wheel_phase = None
+        _phase_started_at = None
+        _phase_duration = None
+        if had_activity:
+            _wheel_location = WheelLocation.UNKNOWN
+            _requires_homing = True
         _motion_token += 1
+        return _status_locked()
+
+
+def confirm_logistics_center():
+    global _wheel_location, _requires_homing
+
+    init()
+    with _wheel_lock:
+        if _wheel_mode is not None:
+            raise WheelBusyError("底盘运行中，无法确认物流中心位置")
+        _wheel_location = WheelLocation.LOGISTICS_CENTER
+        _requires_homing = False
         return _status_locked()
 
 __all__ = [
     "WHEEL_PINS",
     "WheelBusyError",
     "WheelDestination",
+    "WheelLocation",
     "WheelMotion",
-    "complete_destination",
+    "WheelPhase",
+    "advance_automatic_phase",
+    "confirm_logistics_center",
     "get_wheel_status",
     "half_turn",
     "half_turn2",
