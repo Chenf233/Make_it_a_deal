@@ -16,7 +16,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 
 from fastapi import Body
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
 from core.state import app_state
@@ -238,6 +238,20 @@ class ParcelUpdateRequest(BaseModel):
     receiver_name: Optional[str] = Field(None, max_length=50)
     target_location: Optional[Literal["A", "B"]] = None
     status: Optional[int] = Field(None, ge=1, le=3)
+    in_time: Optional[str] = None
+
+    @field_validator("in_time")
+    @classmethod
+    def validate_in_time(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        except ValueError as exc:
+            raise ValueError("入库时间格式必须为 YYYY-MM-DD HH:MM:SS") from exc
+        if parsed.strftime("%Y-%m-%d %H:%M:%S") != value:
+            raise ValueError("入库时间格式必须为 YYYY-MM-DD HH:MM:SS")
+        return value
 
 
 @router.post("/parcels", response_model=APIResponse)
@@ -309,8 +323,11 @@ async def update_parcel(parcel_id: int, payload: ParcelUpdateRequest):
             cabinet_number=payload.cabinet_number,
             target_location=payload.target_location,
             status=payload.status,
+            in_time=payload.in_time,
             extra_info=extra_info if (payload.company is not None or payload.receiver_name is not None) else None
         )
+    except ValueError as e:
+        return APIResponse(code=400, message=f"更新失败：{str(e)}")
     except Exception as e:
         logger.exception("更新包裹失败")
         return APIResponse(code=500, message=f"更新失败：{str(e)}")

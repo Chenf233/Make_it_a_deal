@@ -28,6 +28,16 @@
         tbody.innerHTML = '<tr class="table-placeholder"><td colspan="10">加载中...</td></tr>';
     }
 
+    function toDateTimeLocal(value) {
+        return value ? value.replace(' ', 'T') : '';
+    }
+
+    function toStorageDateTime(value) {
+        if (!value) return '';
+        const withSeconds = value.length === 16 ? `${value}:00` : value;
+        return withSeconds.replace('T', ' ');
+    }
+
     // ============ 模态框通用 ============
     function openModal(id) {
         $(`#${id}`).classList.remove('hidden');
@@ -235,6 +245,9 @@
         $('#parcel-id').value = '';
         $('#parcel-status').value = '1';
         $('#parcel-target-location').value = Math.random() < 0.5 ? 'A' : 'B';
+        $('#parcel-in-time').value = '';
+        $('#parcel-in-time').required = false;
+        $('#parcel-in-time-group').classList.add('hidden');
         $('#modal-parcel-title').textContent = '手动入库';
         openModal('modal-parcel');
     });
@@ -338,6 +351,9 @@
             $('#parcel-cabinet').value = p.cabinet_number || '';
             $('#parcel-target-location').value = p.target_location || 'A';
             $('#parcel-status').value = p.status;
+            $('#parcel-in-time').value = toDateTimeLocal(p.in_time);
+            $('#parcel-in-time').required = true;
+            $('#parcel-in-time-group').classList.remove('hidden');
             $('#modal-parcel-title').textContent = '编辑包裹';
             openModal('modal-parcel');
         } catch (e) {
@@ -375,9 +391,11 @@
         const cabinet_number = $('#parcel-cabinet').value.trim();
         const target_location = $('#parcel-target-location').value;
         const status = parseInt($('#parcel-status').value);
+        const in_time = toStorageDateTime($('#parcel-in-time').value);
 
         if (!tracking_no) { showToast('快递单号为必填', 'error'); return; }
         if (!receiver_phone || !/^1[3-9]\d{9}$/.test(receiver_phone)) { showToast('手机号格式不正确', 'error'); return; }
+        if (id && !in_time) { showToast('入库时间不能为空', 'error'); return; }
 
         if (!id) {
             try {
@@ -393,7 +411,7 @@
             }
         } else {
             try {
-                const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, target_location, status });
+                const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, target_location, status, in_time });
                 const resp = await fetch(`/api/backend/parcels/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
                 const json = await resp.json();
                 if (!resp.ok || json.code !== 200) throw new Error(json.message || '更新失败');

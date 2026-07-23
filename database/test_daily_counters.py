@@ -61,6 +61,76 @@ class ParcelDailyCounterTests(unittest.TestCase):
         third = ParcelDailyCounterRepository.refresh_snapshot(date(2026, 7, 23))
         self.assertEqual((third["target_a_count"], third["target_b_count"]), (0, 0))
 
+    def test_backend_can_update_in_time_and_changes_list_order(self):
+        first = ParcelRepository.add_parcel(
+            "in-time-first", cabinet_number="A01",
+            receiver_phone="13800000000", target_location="A"
+        )
+        second = ParcelRepository.add_parcel(
+            "in-time-second", cabinet_number="A02",
+            receiver_phone="13800000001", target_location="B"
+        )
+
+        self.assertTrue(ParcelRepository.update_parcel(
+            first["parcel_id"], in_time="2026-07-23 12:00:00"
+        ))
+        self.assertTrue(ParcelRepository.update_parcel(
+            second["parcel_id"], in_time="2026-07-22 12:00:00"
+        ))
+
+        updated = ParcelRepository.get_parcel_by_id(first["parcel_id"])
+        ordered = ParcelRepository.get_all_parcels()
+        self.assertEqual(updated["in_time"], "2026-07-23 12:00:00")
+        self.assertEqual(
+            [parcel["parcel_id"] for parcel in ordered[:2]],
+            [first["parcel_id"], second["parcel_id"]],
+        )
+
+    def test_update_in_time_rejects_invalid_format(self):
+        parcel = ParcelRepository.add_parcel(
+            "invalid-in-time", cabinet_number="A03",
+            receiver_phone="13800000002", target_location="A"
+        )
+
+        with self.assertRaisesRegex(ValueError, "入库时间格式"):
+            ParcelRepository.update_parcel(
+                parcel["parcel_id"], in_time="2026-7-23 12:00"
+            )
+
+    def test_picked_up_parcel_rejects_in_time_after_out_time(self):
+        parcel = ParcelRepository.add_parcel(
+            "picked-in-time", cabinet_number="A04",
+            receiver_phone="13800000003", target_location="B", status=2
+        )
+        original = ParcelRepository.get_parcel_by_id(parcel["parcel_id"])
+        out_time = datetime.strptime(original["out_time"], "%Y-%m-%d %H:%M:%S")
+        invalid_in_time = out_time.replace(year=out_time.year + 1).strftime("%Y-%m-%d %H:%M:%S")
+
+        with self.assertRaisesRegex(ValueError, "入库时间不能晚于取件时间"):
+            ParcelRepository.update_parcel(
+                parcel["parcel_id"], in_time=invalid_in_time
+            )
+
+        unchanged = ParcelRepository.get_parcel_by_id(parcel["parcel_id"])
+        self.assertEqual(unchanged["in_time"], original["in_time"])
+
+    def test_status_and_future_in_time_cannot_create_invalid_pickup(self):
+        parcel = ParcelRepository.add_parcel(
+            "future-pickup", cabinet_number="A05",
+            receiver_phone="13800000004", target_location="A"
+        )
+
+        with self.assertRaisesRegex(ValueError, "入库时间不能晚于取件时间"):
+            ParcelRepository.update_parcel(
+                parcel["parcel_id"],
+                status=2,
+                in_time="2999-01-01 00:00:00",
+            )
+
+        unchanged = ParcelRepository.get_parcel_by_id(parcel["parcel_id"])
+        self.assertEqual(unchanged["status"], 1)
+        self.assertIsNone(unchanged["out_time"])
+
     def test_existing_schema_drops_legacy_parcels(self):
         with DatabaseManager.get_connection() as conn:
             conn.execute("DROP TABLE parcels")
