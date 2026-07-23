@@ -239,6 +239,32 @@
         openModal('modal-parcel');
     });
 
+    $('#btn-daily-sync').addEventListener('click', async (e) => {
+        const button = e.currentTarget;
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = '上报中...';
+
+        try {
+            const resp = await fetch('/api/iot/daily-sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ force: true })
+            });
+            const json = await resp.json();
+            if (!resp.ok || json.code !== 200) {
+                throw new Error(json.message || '昨日数据上报失败');
+            }
+            const data = json.data || {};
+            showToast(`上报成功：business_date=${data.business_date}，target_a_count=${data.target_a_count}，target_b_count=${data.target_b_count}`);
+        } catch (err) {
+            showToast(err.message || '昨日数据上报失败', 'error');
+        } finally {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    });
+
     $('#btn-random-fill').addEventListener('click', () => {
         var companies = ['顺丰速运', '京东物流', '圆通速递', '中通快递', '韵达快递'];
         var names = ['张三', '李四', '王五', '赵六', '虞大'];
@@ -358,7 +384,7 @@
                 const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, target_location, status });
                 const resp = await fetch('/api/backend/parcels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
                 const json = await resp.json();
-                if (!resp.ok) throw new Error(json.message || json.message || '入库失败');
+                if (!resp.ok || json.code !== 200) throw new Error(json.message || '入库失败');
                 showToast('包裹入库成功');
                 closeModal('modal-parcel');
                 loadParcels();
@@ -370,7 +396,7 @@
                 const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, target_location, status });
                 const resp = await fetch(`/api/backend/parcels/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
                 const json = await resp.json();
-                if (!resp.ok) throw new Error(json.message || json.message || '更新失败');
+                if (!resp.ok || json.code !== 200) throw new Error(json.message || '更新失败');
                 showToast('包裹信息已更新');
                 closeModal('modal-parcel');
                 loadParcels();

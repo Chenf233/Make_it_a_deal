@@ -292,8 +292,6 @@ async def update_parcel(parcel_id: int, payload: ParcelUpdateRequest):
     existing = ParcelRepository.get_parcel_by_id(parcel_id)
     if not existing:
         return APIResponse(code=404, message="包裹不存在")
-    if payload.target_location is not None and existing["status"] != 1:
-        return APIResponse(code=400, message="已取件或异常包裹不能修改目标类别")
 
     extra_info = existing.get("extra_info") or {}
     if isinstance(extra_info, str):

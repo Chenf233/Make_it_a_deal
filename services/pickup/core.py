@@ -109,7 +109,7 @@ class PickupHandler:
         if not matched:
             return False, f"未找到属于您的包裹单号 {tracking_no}，请确认", None
 
-        pickup_result = ParcelRepository.complete_pickup_and_increment(matched["parcel_id"])
+        pickup_result = ParcelRepository.complete_pickup(matched["parcel_id"])
         if not pickup_result:
             return False, "包裹已被取走，请确认", None
 
@@ -121,12 +121,10 @@ class PickupHandler:
         )
 
         logger.info(
-            "用户 %s 确认取件 %s，目标类别 %s，当日 A/B=%s/%s",
+            "用户 %s 确认取件 %s，目标类别 %s",
             user_id,
             tracking_no,
             pickup_result["target_location"],
-            pickup_result["target_a_count"],
-            pickup_result["target_b_count"],
         )
 
         try:

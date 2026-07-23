@@ -191,7 +191,7 @@
             font-weight: 600;
         }
 
-        .position-card {
+        .status-card {
             margin-top: 14px;
             padding: 18px;
             border: 1px solid var(--line);
@@ -199,72 +199,56 @@
             background: rgba(0, 0, 0, 0.16);
         }
 
-        .position-head {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .position-head span {
-            color: var(--muted);
-            font-size: 13px;
-        }
-
-        #positionValue {
-            font-family: Consolas, monospace;
-            font-size: 28px;
-        }
-
-        .track {
-            position: relative;
-            height: 8px;
-            margin: 20px 5px 8px;
-            border-radius: 999px;
-            background: #303a41;
-        }
-
-        .track::before,
-        .track::after {
-            position: absolute;
-            top: 17px;
-            color: var(--muted);
-            font-size: 12px;
-            font-weight: 800;
-        }
-
-        .track::before {
-            left: -5px;
-            content: "B";
-        }
-
-        .track::after {
-            right: -5px;
-            content: "A";
-        }
-
-        #positionMarker {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 18px;
-            height: 18px;
-            border: 3px solid #11171b;
-            border-radius: 50%;
-            background: var(--accent);
-            transform: translate(-50%, -50%);
-            transition: left 180ms linear;
-        }
-
         #status {
             min-height: 24px;
-            margin: 36px 0 0;
+            margin: 0;
             color: var(--muted);
             line-height: 1.6;
         }
 
         #status.error {
             color: #ff918b;
+        }
+
+        .home-button {
+            width: 100%;
+            margin-top: 14px;
+            padding: 13px 16px;
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            background: var(--accent-dark);
+            color: var(--accent);
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .arrival-bubble {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 20;
+            max-width: min(380px, calc(100vw - 32px));
+            padding: 16px 20px;
+            border: 1px solid var(--accent);
+            border-radius: 14px;
+            background: #1b2414;
+            color: var(--accent);
+            font-weight: 800;
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.4);
+            opacity: 0;
+            transform: translateY(-14px);
+            pointer-events: none;
+            transition: opacity 180ms ease, transform 180ms ease;
+        }
+
+        .arrival-bubble.visible {
+            opacity: 1;
+            transform: translateY(0);
         }
 
         @media (max-width: 760px) {
@@ -299,7 +283,7 @@
         <header>
             <span class="eyebrow">Differential Drive Control</span>
             <h1>底盘控制</h1>
-            <p class="intro">方向按钮按住运行、松开停止。手动操作后位置按中点重新计算；自动到点以 B=0、A=1 建模，从中点到任一端预计 3 秒。</p>
+            <p class="intro">方向按钮按住运行、松开停止。自动任务从物流中心出发，3 秒到达驿站，停留 3 秒后用 3 秒返回物流中心。</p>
         </header>
 
         <div class="dashboard">
@@ -318,40 +302,37 @@
                 <h2 class="panel-title">自动到点</h2>
                 <div class="destination-grid">
                     <button class="destination-button" type="button" data-destination="a">
-                        <strong>到快递站</strong>
-                        <span>前进方向 · 坐标 1.0</span>
+                        <strong>到驿站1</strong>
+                        <span>3 秒到站 · 停留后返回</span>
                     </button>
                     <button class="destination-button" type="button" data-destination="b">
-                        <strong>到物流中心</strong>
-                        <span>后退方向 · 坐标 0.0</span>
+                        <strong>到驿站2</strong>
+                        <span>3 秒到站 · 停留后返回</span>
                     </button>
                 </div>
 
-                <div class="position-card">
-                    <div class="position-head">
-                        <span>估算位置</span>
-                        <strong id="positionValue">0.5000</strong>
-                    </div>
-                    <div class="track" aria-label="物流中心到快递站的位置">
-                        <span id="positionMarker"></span>
-                    </div>
-                    <p id="status" role="status">底盘空闲，当前位置为中点。</p>
+                <div class="status-card">
+                    <p id="status" role="status">底盘位于物流中心，等待任务。</p>
+                    <button id="confirmCenterButton" class="home-button hidden" type="button">已人工归位物流中心</button>
                 </div>
             </section>
         </div>
     </main>
+    <div id="arrivalBubble" class="arrival-bubble" role="status" aria-live="polite"></div>
 
     <script>
         const motionButtons = [...document.querySelectorAll("[data-motion]")];
         const destinationButtons = [...document.querySelectorAll("[data-destination]")];
         const stopAllButton = document.getElementById("stopAllButton");
-        const positionValue = document.getElementById("positionValue");
-        const positionMarker = document.getElementById("positionMarker");
         const statusElement = document.getElementById("status");
+        const confirmCenterButton = document.getElementById("confirmCenterButton");
+        const arrivalBubble = document.getElementById("arrivalBubble");
 
         let activeMotion = null;
         let commandQueue = Promise.resolve();
         let latestState = null;
+        let lastShownArrivalId = null;
+        let bubbleTimer = null;
 
         function setStatus(message, isError = false) {
             statusElement.textContent = message;
@@ -378,10 +359,6 @@
             if (!state) return;
             latestState = state;
 
-            const position = Math.max(0, Math.min(1, Number(state.position) || 0));
-            positionValue.textContent = position.toFixed(4);
-            positionMarker.style.left = `${position * 100}%`;
-
             const busy = Boolean(state.busy);
             motionButtons.forEach(button => {
                 const isActive = state.mode === "manual" && state.motion === button.dataset.motion;
@@ -389,17 +366,41 @@
                 button.disabled = busy && !isActive;
             });
             destinationButtons.forEach(button => {
-                button.disabled = busy;
+                button.disabled = busy || Boolean(state.requires_homing);
             });
+            confirmCenterButton.classList.toggle("hidden", !state.requires_homing || busy);
 
             if (state.mode === "automatic") {
-                const target = (state.destination || "").toUpperCase();
-                setStatus(`正在前往 ${target} 地，预计剩余 ${Number(state.remaining_seconds).toFixed(2)} 秒。`);
+                const station = stationLabel(state.destination);
+                if (state.phase === "outbound") {
+                    setStatus(`正在从物流中心前往${station}，剩余 ${Number(state.phase_remaining_seconds).toFixed(2)} 秒。`);
+                } else if (state.phase === "dwell") {
+                    setStatus(`已到达${station}，停留中，${Number(state.phase_remaining_seconds).toFixed(2)} 秒后返回。`);
+                    if (state.arrival_id !== null && state.arrival_id !== lastShownArrivalId) {
+                        lastShownArrivalId = state.arrival_id;
+                        showArrivalBubble(`已到达${station}，停留 3 秒后返回物流中心`);
+                    }
+                } else {
+                    setStatus(`正在从${station}返回物流中心，剩余 ${Number(state.phase_remaining_seconds).toFixed(2)} 秒。`);
+                }
             } else if (state.mode === "manual") {
-                setStatus(`正在执行手动动作：${motionLabel(state.motion)}。松开按钮后停止，位置已重置为中点。`);
+                setStatus(`正在执行手动动作：${motionLabel(state.motion)}。松开后位置将标记为未知。`);
+            } else if (state.requires_homing) {
+                setStatus("底盘位置未知。请人工归位物流中心后点击确认。", true);
             } else {
-                setStatus(`底盘空闲，当前估算坐标 ${position.toFixed(4)}。`);
+                setStatus("底盘位于物流中心，等待任务。");
             }
+        }
+
+        function stationLabel(destination) {
+            return destination === "station_1" ? "驿站1" : "驿站2";
+        }
+
+        function showArrivalBubble(message) {
+            arrivalBubble.textContent = message;
+            arrivalBubble.classList.add("visible");
+            clearTimeout(bubbleTimer);
+            bubbleTimer = setTimeout(() => arrivalBubble.classList.remove("visible"), 3200);
         }
 
         function motionLabel(motion) {
@@ -457,7 +458,7 @@
             if (activeMotion || latestState?.busy) return;
 
             const destination = button.dataset.destination;
-            setStatus(`正在启动前往 ${destination.toUpperCase()} 地...`);
+            setStatus(`正在启动${destination === "a" ? "驿站1" : "驿站2"}往返任务...`);
             queueCommand(async () => {
                 try {
                     const result = await sendCommand(`/api/wheels/destinations/${destination}`);
@@ -527,10 +528,25 @@
         });
 
         stopAllButton.addEventListener("click", stopAll);
-        window.addEventListener("blur", stopAll);
+        confirmCenterButton.addEventListener("click", () => queueCommand(async () => {
+            try {
+                const result = await sendCommand("/api/wheels/confirm-logistics-center");
+                renderState(result.data);
+                setStatus(result.message);
+            } catch (error) {
+                if (error.state) renderState(error.state);
+                setStatus(error.message, true);
+            }
+        }));
+        window.addEventListener("blur", () => {
+            if (!activeMotion) return;
+            const button = motionButtons.find(item => item.dataset.motion === activeMotion);
+            if (button) stopManual(button);
+        });
         window.addEventListener("pagehide", () => {
+            if (!activeMotion) return;
+            navigator.sendBeacon(`/api/wheels/motions/${activeMotion}/stop`);
             activeMotion = null;
-            navigator.sendBeacon("/api/wheels/stop-all");
         });
 
         refreshState();

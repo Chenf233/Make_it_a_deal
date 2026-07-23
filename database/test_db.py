@@ -107,7 +107,7 @@ def simulate_frontend_requests():
     print("\n--- 5. 客户取件 ---")
     picked = []
     for p in active:
-        success = ParcelRepository.complete_pickup_and_increment(p['parcel_id'])
+        success = ParcelRepository.complete_pickup(p['parcel_id'])
         if success:
             picked.append(p['cabinet_number'])
             print(f"   [+] 包裹 {p['cabinet_number']} 状态已更新为'已取件'")

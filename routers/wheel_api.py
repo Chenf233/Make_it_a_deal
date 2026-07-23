@@ -8,7 +8,9 @@ from services.motor import (
     WheelBusyError,
     WheelDestination,
     WheelMotion,
-    complete_destination,
+    WheelPhase,
+    advance_automatic_phase,
+    confirm_logistics_center,
     get_wheel_status,
     start_destination,
     start_manual_motion,
@@ -26,15 +28,19 @@ async def run_gpio_command(command, *args):
     return await loop.run_in_executor(None, command, *args)
 
 
-async def complete_destination_after(token: int, duration_seconds: float, destination: WheelDestination):
-    await asyncio.sleep(duration_seconds)
-    completed, status = await run_gpio_command(complete_destination, token)
-    if completed:
-        logger.info("轮子自动行驶完成，当前位置：%s", status["position"])
+async def run_automatic_cycle(token: int, phase_duration_seconds: float):
+    for phase in (WheelPhase.OUTBOUND, WheelPhase.DWELL, WheelPhase.RETURNING):
+        await asyncio.sleep(phase_duration_seconds)
+        advanced, status = await run_gpio_command(
+            advance_automatic_phase, token, phase.value
+        )
+        if not advanced:
+            return
+    logger.info("轮子自动循环完成，当前位置：%s", status["location"])
 
 
-def schedule_destination_completion(token: int, duration_seconds: float, destination: WheelDestination):
-    task = asyncio.create_task(complete_destination_after(token, duration_seconds, destination))
+def schedule_automatic_cycle(token: int, phase_duration_seconds: float):
+    task = asyncio.create_task(run_automatic_cycle(token, phase_duration_seconds))
     _automatic_tasks.add(task)
     task.add_done_callback(_automatic_tasks.discard)
 
@@ -56,6 +62,7 @@ async def status():
 async def stop_all():
     try:
         state = await run_gpio_command(stop_all_wheels)
+        await cancel_automatic_tasks()
         return APIResponse(message="底盘已停止", data=state)
     except Exception as exc:
         logger.exception("停止底盘失败")
@@ -90,20 +97,28 @@ async def go_to_destination(destination: WheelDestination):
     try:
         result = await run_gpio_command(start_destination, destination.value)
         token = result["token"]
-        duration = result["duration_seconds"]
-        if token is not None:
-            schedule_destination_completion(token, duration, destination)
-            name = "快递站" if destination == WheelDestination.A else "物流中心"
-            message = f"正在前往{name}，预计 {duration:.2f} 秒"
-        else:
-            name = "快递站" if destination == WheelDestination.A else "物流中心"
-            message = f"当前已经位于{name}"
+        phase_duration = result["phase_duration_seconds"]
+        schedule_automatic_cycle(token, phase_duration)
+        name = "一号驿站" if destination == WheelDestination.A else "二号驿站"
+        message = f"已启动{name}往返任务"
         return APIResponse(message=message, data=result["status"])
     except WheelBusyError as exc:
         return APIResponse(code=409, message=str(exc), data=await run_gpio_command(get_wheel_status))
     except Exception as exc:
         logger.exception("前往 %s 地失败", destination.value.upper())
         return APIResponse(code=500, message=f"自动行驶失败：{str(exc)}")
+
+
+@router.post("/confirm-logistics-center", response_model=APIResponse)
+async def confirm_center():
+    try:
+        state = await run_gpio_command(confirm_logistics_center)
+        return APIResponse(message="已确认底盘位于物流中心", data=state)
+    except WheelBusyError as exc:
+        return APIResponse(code=409, message=str(exc), data=await run_gpio_command(get_wheel_status))
+    except Exception as exc:
+        logger.exception("确认物流中心位置失败")
+        return APIResponse(code=500, message=f"确认失败：{str(exc)}")
 
 
 @router.get("/iot-status", response_model=APIResponse)

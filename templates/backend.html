@@ -70,7 +70,10 @@
                             <button class="filter-btn" data-status="2">已取件</button>
                             <button class="filter-btn" data-status="3">异常</button>
                         </div>
-                        <button id="btn-add-parcel" class="btn btn-primary">+ 手动入库</button>
+                        <div class="header-actions">
+                            <button id="btn-daily-sync" class="btn btn-secondary">强制上报昨日数据</button>
+                            <button id="btn-add-parcel" class="btn btn-primary">+ 手动入库</button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <table class="data-table" id="parcels-table">
@@ -80,7 +83,7 @@
                                     <th>快递公司</th>
                                     <th>收件人</th>
                                     <th>手机号</th>
-                                    <th>目标位置</th>
+                                    <th>地址</th>
                                     <th>取件码</th>
                                     <th>状态</th>
                                     <th>入库时间</th>
@@ -214,15 +217,15 @@
                     <input type="text" id="parcel-cabinet" placeholder="留空自动分配">
                 </div>
                 <div class="form-group">
-                    <label for="parcel-target-location">目标位置</label>
-                    <select id="parcel-target-location" required style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:4px;font-size:14px;">
+                    <label for="parcel-target-location">地址</label>
+                    <select id="parcel-target-location" required>
                         <option value="A">A</option>
                         <option value="B">B</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="parcel-status">状态</label>
-                    <select id="parcel-status" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:4px;font-size:14px;">
+                    <select id="parcel-status">
                         <option value="1">在库</option>
                         <option value="2">已取件</option>
                         <option value="3">异常</option>

@@ -119,6 +119,12 @@ body {
     font-weight: 600;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .card-body {
     padding: 20px;
 }
@@ -159,6 +165,11 @@ body {
     font-size: 14px;
     font-weight: 500;
     transition: background 0.2s;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .btn-primary {
@@ -312,12 +323,19 @@ body {
 }
 
 .form-group input[type="text"],
-.form-group input[type="file"] {
+.form-group input[type="file"],
+.form-group select {
     width: 100%;
     padding: 8px 12px;
     border: 1px solid var(--border);
     border-radius: 4px;
     font-size: 14px;
+    background: #fff;
+    color: var(--text);
+}
+
+.form-group select {
+    cursor: pointer;
 }
 
 .photo-preview {
