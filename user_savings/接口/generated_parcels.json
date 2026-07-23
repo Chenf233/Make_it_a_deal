@@ -1,0 +1,18 @@
+[
+  {
+    "tracking_no": "QR202607232251139311A",
+    "company": "顺丰速运",
+    "receiver_name": "我不想上学",
+    "receiver_phone": "13800000000",
+    "target_location": "A",
+    "file": "parcel_QR202607232251139311A_A.png"
+  },
+  {
+    "tracking_no": "QR202607232251130175B",
+    "company": "京东物流",
+    "receiver_name": "我不想上学",
+    "receiver_phone": "13800000000",
+    "target_location": "B",
+    "file": "parcel_QR202607232251130175B_B.png"
+  }
+]
