@@ -48,10 +48,13 @@ class HuaweiIoTRealConnectionTests(unittest.IsolatedAsyncioTestCase):
         self._validate_config_and_dependencies()
 
         from database.db_manager import DatabaseManager
-        from database.models import StationCounterRepository
+        from database.models import ParcelDailyCounterRepository
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
 
         DatabaseManager.init_db()
-        self.counters = StationCounterRepository.get_counters()
+        yesterday = datetime.now(ZoneInfo(settings.HUAWEI_IOT_BUSINESS_TIMEZONE)).date() - timedelta(days=1)
+        self.counters = ParcelDailyCounterRepository.ensure_date(yesterday)
         self.stderr_lines = deque(maxlen=100)
         self.seen_messages = []
         self.process = await asyncio.create_subprocess_exec(
@@ -98,8 +101,10 @@ class HuaweiIoTRealConnectionTests(unittest.IsolatedAsyncioTestCase):
             description="华为云鉴权连接成功事件",
         )
 
-        await self._report_and_wait("A", self.counters["counter_a"])
-        await self._report_and_wait("B", self.counters["counter_b"])
+        await self._report_and_wait({
+            settings.HUAWEI_IOT_DAILY_PROPERTY_A: self.counters["target_a_count"],
+            settings.HUAWEI_IOT_DAILY_PROPERTY_B: self.counters["target_b_count"],
+        })
 
         status_id = f"integration-status-{uuid.uuid4().hex}"
         await self._send({"id": status_id, "op": "status"})
@@ -122,13 +127,13 @@ class HuaweiIoTRealConnectionTests(unittest.IsolatedAsyncioTestCase):
         return_code = await asyncio.wait_for(self.process.wait(), timeout=10)
         self.assertEqual(return_code, 0, self._diagnostics("station_iotd 未正常退出"))
 
-    async def _report_and_wait(self, station, value):
-        request_id = f"integration-{station.lower()}-{uuid.uuid4().hex}"
+    async def _report_and_wait(self, properties):
+        request_id = f"integration-properties-{uuid.uuid4().hex}"
         await self._send({
             "id": request_id,
-            "op": "report_station",
-            "station": station,
-            "value": value,
+            "op": "report_properties",
+            "service_id": settings.HUAWEI_IOT_DAILY_SERVICE_ID,
+            "properties": properties,
         })
 
         accepted = False
@@ -137,7 +142,7 @@ class HuaweiIoTRealConnectionTests(unittest.IsolatedAsyncioTestCase):
         while not (accepted and published):
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
-                self.fail(self._diagnostics(f"等待 {station} 地发布成功超时"))
+                self.fail(self._diagnostics("等待属性发布成功超时"))
             message = await self._read_message(remaining)
             if message.get("id") != request_id:
                 continue
@@ -146,11 +151,10 @@ class HuaweiIoTRealConnectionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(message.get("result"), {"queued", "already_queued"})
                 accepted = True
             elif message.get("event") == "published":
-                self.assertEqual(message.get("station"), station)
-                self.assertEqual(message.get("value"), value)
+                self.assertEqual(message.get("service_id"), settings.HUAWEI_IOT_DAILY_SERVICE_ID)
                 published = True
             elif message.get("event") == "publish_failed":
-                self.fail(self._diagnostics(f"{station} 地发布失败：{message}"))
+                self.fail(self._diagnostics(f"属性发布失败：{message}"))
 
     async def _send(self, message):
         if self.process.returncode is not None:

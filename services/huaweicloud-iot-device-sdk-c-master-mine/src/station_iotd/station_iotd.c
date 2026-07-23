@@ -17,6 +17,8 @@
 
 #define MAX_LINE_LENGTH 4096
 #define MAX_REQUEST_ID 96
+#define MAX_SERVICE_ID 128
+#define MAX_PROPERTIES_LENGTH 4096
 #define MAX_PENDING_REPORTS 32
 
 typedef struct {
@@ -29,8 +31,8 @@ typedef struct {
 
 typedef struct ReportRequest {
     char id[MAX_REQUEST_ID + 1];
-    char station;
-    int value;
+    char service_id[MAX_SERVICE_ID + 1];
+    char *properties;
     struct ReportRequest *next;
 } ReportRequest;
 
@@ -71,19 +73,26 @@ static void emit_connection(const char *state, const char *error)
     cJSON_Delete(message);
 }
 
-static void emit_report_event(const char *event, const ReportRequest *request, const char *error)
+static void emit_report_event(const char *event, const char *id, const char *service_id, const char *error)
 {
     cJSON *message = cJSON_CreateObject();
-    char station[2] = {request->station, '\0'};
     cJSON_AddStringToObject(message, "event", event);
-    cJSON_AddStringToObject(message, "id", request->id);
-    cJSON_AddStringToObject(message, "station", station);
-    cJSON_AddNumberToObject(message, "value", request->value);
+    cJSON_AddStringToObject(message, "id", id);
+    cJSON_AddStringToObject(message, "service_id", service_id);
     if (error != NULL) {
         cJSON_AddStringToObject(message, "error", error);
     }
     emit_json(message);
     cJSON_Delete(message);
+}
+
+static void free_report(ReportRequest *request)
+{
+    if (request == NULL) {
+        return;
+    }
+    cJSON_free(request->properties);
+    free(request);
 }
 
 static void emit_response(const char *id, int ok, const char *result, const char *error)
@@ -171,8 +180,8 @@ static void handle_publish_success(EN_IOTA_MQTT_PROTOCOL_RSP *response)
     pthread_cond_broadcast(&g_state_changed);
     pthread_mutex_unlock(&g_state_mutex);
 
-    emit_report_event("published", request, NULL);
-    free(request);
+    emit_report_event("published", request->id, request->service_id, NULL);
+    free_report(request);
 }
 
 static void handle_publish_failure(EN_IOTA_MQTT_PROTOCOL_RSP *response)
@@ -188,14 +197,10 @@ static void handle_publish_failure(EN_IOTA_MQTT_PROTOCOL_RSP *response)
     if (g_in_flight == request) {
         g_in_flight = NULL;
     }
-    pthread_mutex_unlock(&g_state_mutex);
-
-    emit_report_event("publish_failed", request, message);
-
-    pthread_mutex_lock(&g_state_mutex);
     prepend_report_locked(request);
     pthread_cond_broadcast(&g_state_changed);
     pthread_mutex_unlock(&g_state_mutex);
+    emit_report_event("publish_failed", request->id, request->service_id, message);
 }
 
 static char *read_text_file(const char *path)
@@ -288,17 +293,29 @@ static int valid_request_id(const char *id)
     return 1;
 }
 
-static int queue_report(const char *id, char station, int value)
+static int valid_bounded_string(const cJSON *item, size_t max_length)
+{
+    size_t length;
+    if (!cJSON_IsString(item) || item->valuestring == NULL) {
+        return 0;
+    }
+    length = strlen(item->valuestring);
+    return length > 0 && length <= max_length;
+}
+
+static int queue_report(const char *id, const char *service_id, char *properties, char *queued_service_id)
 {
     ReportRequest *request;
     pthread_mutex_lock(&g_state_mutex);
     for (request = g_queue_head; request != NULL; request = request->next) {
         if (strcmp(request->id, id) == 0) {
+            snprintf(queued_service_id, MAX_SERVICE_ID + 1, "%s", request->service_id);
             pthread_mutex_unlock(&g_state_mutex);
             return 1;
         }
     }
     if (g_in_flight != NULL && strcmp(g_in_flight->id, id) == 0) {
+        snprintf(queued_service_id, MAX_SERVICE_ID + 1, "%s", g_in_flight->service_id);
         pthread_mutex_unlock(&g_state_mutex);
         return 1;
     }
@@ -309,11 +326,12 @@ static int queue_report(const char *id, char station, int value)
     request = (ReportRequest *)calloc(1, sizeof(ReportRequest));
     if (request == NULL) {
         pthread_mutex_unlock(&g_state_mutex);
-        return -1;
+        return -2;
     }
     snprintf(request->id, sizeof(request->id), "%s", id);
-    request->station = station;
-    request->value = value;
+    snprintf(request->service_id, sizeof(request->service_id), "%s", service_id);
+    snprintf(queued_service_id, MAX_SERVICE_ID + 1, "%s", request->service_id);
+    request->properties = properties;
     if (g_queue_tail == NULL) {
         g_queue_head = request;
     } else {
@@ -369,9 +387,6 @@ static void *report_worker(void *unused)
     while (!g_stopping) {
         ReportRequest *request;
         ST_IOTA_SERVICE_DATA_INFO service;
-        char properties[128];
-        const char *service_id;
-        const char *property_name;
         int result;
 
         pthread_mutex_lock(&g_state_mutex);
@@ -392,24 +407,19 @@ static void *report_worker(void *unused)
         g_in_flight = request;
         pthread_mutex_unlock(&g_state_mutex);
 
-        service_id = request->station == 'A' ? "Station_1" : "Station_2";
-        property_name = request->station == 'A' ? "A parcels per D" : "B parcels per D";
-        snprintf(properties, sizeof(properties), "{\"%s\":%d}", property_name, request->value);
-        service.service_id = (char *)service_id;
+        service.service_id = request->service_id;
         service.event_time = NULL;
-        service.properties = properties;
+        service.properties = request->properties;
         result = IOTA_PropertiesReport(&service, 1, 0, request);
-        if (result != 0) {
+        if (result < 0) {
             pthread_mutex_lock(&g_state_mutex);
             if (g_in_flight == request) {
                 g_in_flight = NULL;
             }
-            pthread_mutex_unlock(&g_state_mutex);
-            emit_report_event("publish_failed", request, "sdk_rejected_report");
-            pthread_mutex_lock(&g_state_mutex);
             prepend_report_locked(request);
             pthread_cond_broadcast(&g_state_changed);
             pthread_mutex_unlock(&g_state_mutex);
+            emit_report_event("publish_failed", request->id, request->service_id, "sdk_rejected_report");
             interruptible_sleep(1);
         }
     }
@@ -423,6 +433,11 @@ static void handle_command(const char *line)
     cJSON *operation;
     if (root == NULL) {
         emit_response("invalid", 0, NULL, "invalid_json");
+        return;
+    }
+    if (!cJSON_IsObject(root)) {
+        emit_response("invalid", 0, NULL, "invalid_request");
+        cJSON_Delete(root);
         return;
     }
     id = cJSON_GetObjectItemCaseSensitive(root, "id");
@@ -449,25 +464,43 @@ static void handle_command(const char *line)
         pthread_mutex_unlock(&g_state_mutex);
         emit_json(response);
         cJSON_Delete(response);
-    } else if (strcmp(operation->valuestring, "report_station") == 0) {
-        cJSON *station = cJSON_GetObjectItemCaseSensitive(root, "station");
-        cJSON *value = cJSON_GetObjectItemCaseSensitive(root, "value");
-        char station_value;
-        if (!cJSON_IsString(station) || strlen(station->valuestring) != 1 || !cJSON_IsNumber(value)) {
+    } else if (strcmp(operation->valuestring, "report_properties") == 0) {
+        cJSON *service_id = cJSON_GetObjectItemCaseSensitive(root, "service_id");
+        cJSON *properties = cJSON_GetObjectItemCaseSensitive(root, "properties");
+        char *serialized_properties;
+        size_t properties_length;
+        char queued_service_id[MAX_SERVICE_ID + 1];
+        int queued;
+        if (!valid_bounded_string(service_id, MAX_SERVICE_ID) || !cJSON_IsObject(properties)) {
             emit_response(id->valuestring, 0, NULL, "invalid_report");
             cJSON_Delete(root);
             return;
         }
-        station_value = station->valuestring[0];
-        if ((station_value != 'A' && station_value != 'B') || value->valuedouble < 0 || value->valuedouble != value->valueint) {
-            emit_response(id->valuestring, 0, NULL, "invalid_report");
+        serialized_properties = cJSON_PrintUnformatted(properties);
+        if (serialized_properties == NULL) {
+            emit_response(id->valuestring, 0, NULL, "out_of_memory");
+            cJSON_Delete(root);
+            return;
+        }
+        properties_length = strlen(serialized_properties);
+        if (properties_length > MAX_PROPERTIES_LENGTH) {
+            cJSON_free(serialized_properties);
+            emit_response(id->valuestring, 0, NULL, "properties_too_large");
+            cJSON_Delete(root);
+            return;
+        }
+        queued = queue_report(id->valuestring, service_id->valuestring, serialized_properties, queued_service_id);
+        if (queued == -2) {
+            cJSON_free(serialized_properties);
+            emit_response(id->valuestring, 0, NULL, "out_of_memory");
+        } else if (queued < 0) {
+            cJSON_free(serialized_properties);
+            emit_response(id->valuestring, 0, NULL, "queue_full");
         } else {
-            int queued = queue_report(id->valuestring, station_value, value->valueint);
-            if (queued < 0) {
-                emit_response(id->valuestring, 0, NULL, "queue_full");
-            } else {
-                emit_response(id->valuestring, 1, queued == 1 ? "already_queued" : "queued", NULL);
+            if (queued == 1) {
+                cJSON_free(serialized_properties);
             }
+            emit_response(id->valuestring, 1, queued == 1 ? "already_queued" : "queued", NULL);
         }
     } else {
         emit_response(id->valuestring, 0, NULL, "unknown_operation");
@@ -489,7 +522,7 @@ static void free_reports(void)
     request = g_queue_head;
     while (request != NULL) {
         ReportRequest *next = request->next;
-        free(request);
+        free_report(request);
         request = next;
     }
     g_queue_head = NULL;

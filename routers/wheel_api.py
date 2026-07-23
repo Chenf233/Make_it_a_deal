@@ -1,11 +1,8 @@
 import asyncio
 import logging
-from typing import Literal
-
 from fastapi import APIRouter
 
-from database.models import StationCounterRepository
-from database.schemas import APIResponse, StationCounterSet
+from database.schemas import APIResponse
 from services.huawei_iot import huawei_iot
 from services.motor import (
     WheelBusyError,
@@ -34,17 +31,6 @@ async def complete_destination_after(token: int, duration_seconds: float, destin
     completed, status = await run_gpio_command(complete_destination, token)
     if completed:
         logger.info("轮子自动行驶完成，当前位置：%s", status["position"])
-        try:
-            counters, report_id = await huawei_iot.increment_and_report(destination.value)
-            value = counters[f"counter_{destination.value}"]
-            logger.info(
-                "已记录到达 %s 地，累计值 %s，上报任务 %s",
-                destination.value.upper(),
-                value,
-                report_id,
-            )
-        except Exception:
-            logger.exception("记录或上报 %s 地到达事件失败", destination.value.upper())
 
 
 def schedule_destination_completion(token: int, duration_seconds: float, destination: WheelDestination):
@@ -107,33 +93,17 @@ async def go_to_destination(destination: WheelDestination):
         duration = result["duration_seconds"]
         if token is not None:
             schedule_destination_completion(token, duration, destination)
-            message = f"正在前往 {destination.value.upper()} 地，预计 {duration:.2f} 秒"
+            name = "快递站" if destination == WheelDestination.A else "物流中心"
+            message = f"正在前往{name}，预计 {duration:.2f} 秒"
         else:
-            message = f"当前已经位于 {destination.value.upper()} 地"
+            name = "快递站" if destination == WheelDestination.A else "物流中心"
+            message = f"当前已经位于{name}"
         return APIResponse(message=message, data=result["status"])
     except WheelBusyError as exc:
         return APIResponse(code=409, message=str(exc), data=await run_gpio_command(get_wheel_status))
     except Exception as exc:
         logger.exception("前往 %s 地失败", destination.value.upper())
         return APIResponse(code=500, message=f"自动行驶失败：{str(exc)}")
-
-
-@router.get("/counters", response_model=APIResponse)
-async def counters():
-    return APIResponse(data=await run_gpio_command(StationCounterRepository.get_counters))
-
-
-@router.put("/counters/{station}", response_model=APIResponse)
-async def set_counter(station: Literal["a", "b"], payload: StationCounterSet):
-    try:
-        counters_state, report_id = await huawei_iot.set_and_report(station, payload.value)
-        return APIResponse(
-            message=f"{station.upper()} 地累计值已设置并排队上报",
-            data={**counters_state, "report_id": report_id},
-        )
-    except Exception as exc:
-        logger.exception("设置 %s 地累计值失败", station.upper())
-        return APIResponse(code=500, message=f"设置累计值失败：{str(exc)}")
 
 
 @router.get("/iot-status", response_model=APIResponse)

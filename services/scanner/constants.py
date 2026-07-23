@@ -26,6 +26,7 @@ DEMO_DATA_LIST =[
         "company": "顺丰速运",
         "receiver_name": "我不想上学",
         "receiver_phone": "13800000000",
+        "target_location": "A",
         "status": 1,
         "in_time": "2026-04-12 10:00:00"
     },
@@ -34,6 +35,7 @@ DEMO_DATA_LIST =[
         "company": "京东物流",
         "receiver_name": "虞二",
         "receiver_phone": "13800138002",
+        "target_location": "B",
         "status": 1,
         "in_time": "2026-04-12 11:30:00"
     },
@@ -42,6 +44,7 @@ DEMO_DATA_LIST =[
         "company": "圆通速递",
         "receiver_name": "虞三",
         "receiver_phone": "13800138003",
+        "target_location": "A",
         "status": 1,
         "in_time": "2026-04-12 14:15:00"
     }

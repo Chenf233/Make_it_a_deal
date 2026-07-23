@@ -109,8 +109,8 @@ class PickupHandler:
         if not matched:
             return False, f"未找到属于您的包裹单号 {tracking_no}，请确认", None
 
-        ok = ParcelRepository.update_parcel_status(matched["parcel_id"], 2)
-        if not ok:
+        pickup_result = ParcelRepository.complete_pickup_and_increment(matched["parcel_id"])
+        if not pickup_result:
             return False, "包裹已被取走，请确认", None
 
         AccessLogRepository.add_log(
@@ -120,7 +120,14 @@ class PickupHandler:
             picked_parcels=[tracking_no]
         )
 
-        logger.info(f"用户 {user_id} 确认取件 {tracking_no}，状态已更新")
+        logger.info(
+            "用户 %s 确认取件 %s，目标类别 %s，当日 A/B=%s/%s",
+            user_id,
+            tracking_no,
+            pickup_result["target_location"],
+            pickup_result["target_a_count"],
+            pickup_result["target_b_count"],
+        )
 
         try:
             close_user_cabinet(user_id, matched["cabinet_number"])
@@ -130,7 +137,8 @@ class PickupHandler:
         return True, f"取件成功：{tracking_no}", {
             "parcel_id": matched["parcel_id"],
             "tracking_no": tracking_no,
-            "cabinet_number": matched["cabinet_number"]
+            "cabinet_number": matched["cabinet_number"],
+            "target_location": pickup_result["target_location"],
         }
 
     @staticmethod

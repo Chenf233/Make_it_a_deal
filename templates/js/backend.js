@@ -234,6 +234,7 @@
         document.getElementById('form-parcel').reset();
         $('#parcel-id').value = '';
         $('#parcel-status').value = '1';
+        $('#parcel-target-location').value = Math.random() < 0.5 ? 'A' : 'B';
         $('#modal-parcel-title').textContent = '手动入库';
         openModal('modal-parcel');
     });
@@ -249,6 +250,7 @@
         $('#parcel-company').value = companies[rand];
         $('#parcel-name').value = names[rand];
         $('#parcel-cabinet').value = '';
+        $('#parcel-target-location').value = Math.random() < 0.5 ? 'A' : 'B';
     });
 
     async function loadParcels() {
@@ -263,14 +265,14 @@
             if (!resp.ok) throw new Error(json.message || '加载包裹失败');
             renderParcels(json.data);
         } catch (e) {
-            tbody.innerHTML = `<tr class="table-placeholder"><td colspan="8">${e.message}</td></tr>`;
+            tbody.innerHTML = `<tr class="table-placeholder"><td colspan="9">${e.message}</td></tr>`;
         }
     }
 
     function renderParcels(parcels) {
         const tbody = $('#parcels-tbody');
         if (!parcels || parcels.length === 0) {
-            tbody.innerHTML = '<tr class="table-placeholder"><td colspan="8">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr class="table-placeholder"><td colspan="9">暂无数据</td></tr>';
             updatePaginationState('parcels', 0);
             return;
         }
@@ -281,6 +283,7 @@
                 <td>${p.company || '-'}</td>
                 <td>${p.receiver_name || '-'}</td>
                 <td>${p.receiver_phone || '-'}</td>
+                <td>${p.target_location || '-'}</td>
                 <td>${p.cabinet_number || '-'}</td>
                 <td>${statusMap[p.status] || '-'}</td>
                 <td>${p.in_time || '-'}</td>
@@ -307,6 +310,7 @@
             $('#parcel-company').value = p.company || '';
             $('#parcel-name').value = p.receiver_name || '';
             $('#parcel-cabinet').value = p.cabinet_number || '';
+            $('#parcel-target-location').value = p.target_location || 'A';
             $('#parcel-status').value = p.status;
             $('#modal-parcel-title').textContent = '编辑包裹';
             openModal('modal-parcel');
@@ -343,6 +347,7 @@
         const company = $('#parcel-company').value.trim();
         const receiver_name = $('#parcel-name').value.trim();
         const cabinet_number = $('#parcel-cabinet').value.trim();
+        const target_location = $('#parcel-target-location').value;
         const status = parseInt($('#parcel-status').value);
 
         if (!tracking_no) { showToast('快递单号为必填', 'error'); return; }
@@ -350,7 +355,7 @@
 
         if (!id) {
             try {
-                const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, status });
+                const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, target_location, status });
                 const resp = await fetch('/api/backend/parcels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
                 const json = await resp.json();
                 if (!resp.ok) throw new Error(json.message || json.message || '入库失败');
@@ -362,7 +367,7 @@
             }
         } else {
             try {
-                const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, status });
+                const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, target_location, status });
                 const resp = await fetch(`/api/backend/parcels/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
                 const json = await resp.json();
                 if (!resp.ok) throw new Error(json.message || json.message || '更新失败');

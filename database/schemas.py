@@ -25,6 +25,7 @@ class ParcelOut(BaseModel):
     company: str
     receiver_name: str
     receiver_phone: str
+    target_location: str = Field(..., pattern="^[AB]$", description="包裹目标位置：A 或 B")
     cabinet_number: str = Field(..., description="货柜号，同时作为取件码展示")
     status: int = Field(..., description="1: 在库, 2: 已取件, 3: 异常")
     in_time: str
@@ -54,6 +55,7 @@ class ScanResultData(BaseModel):
     company: str
     receiver_name: str
     receiver_phone: str
+    target_location: str = Field(..., pattern="^[AB]$")
     cabinet_number: str  # 入库后分配的货柜号
     is_new_user: bool = Field(False)
 
@@ -67,7 +69,3 @@ class FaceAuthResult(BaseModel):
     has_forgotten_parcels: bool = Field(False, description="出门时判定是否有漏拿的在库包裹")
     exit_expected_total: Optional[int] = Field(None, description="出口模式：应取包裹总数")
     exit_picked_count: Optional[int] = Field(None, description="出口模式：已取包裹数")
-
-
-class StationCounterSet(BaseModel):
-    value: int = Field(..., ge=0, le=2147483647, description="设置后的站点累计值")

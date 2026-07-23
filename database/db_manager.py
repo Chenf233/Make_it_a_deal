@@ -3,6 +3,8 @@ from contextlib import contextmanager
 from database.constants import DB_PATH
 
 class DatabaseManager:
+    SCHEMA_VERSION = 2
+
     @staticmethod
     @contextmanager
     def get_connection():
@@ -18,7 +20,7 @@ class DatabaseManager:
 
     @classmethod
     def init_db(cls):
-        """初始化所有核心数据表（已含货柜号字段）"""
+        """初始化核心表，并执行部署所需的轻量 SQLite 迁移。"""
         with cls.get_connection() as conn:
             cursor = conn.cursor()
             
@@ -36,7 +38,16 @@ class DatabaseManager:
                 )
             ''')
             
-            # 2. 物流包裹表（新增 cabinet_number 字段）
+            parcel_table = cursor.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'parcels'"
+            ).fetchone()
+            if parcel_table:
+                columns = {row[1] for row in cursor.execute("PRAGMA table_info(parcels)").fetchall()}
+                if "target_location" not in columns:
+                    # 历史包裹没有可靠目标类别，按业务要求删除后重建。
+                    cursor.execute("DROP TABLE parcels")
+
+            # 2. 物流包裹表
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS parcels (
                     parcel_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,6 +55,7 @@ class DatabaseManager:
                     pickup_code TEXT,
                     cabinet_number TEXT NOT NULL,
                     receiver_phone TEXT NOT NULL,
+                    target_location TEXT NOT NULL CHECK (target_location IN ('A', 'B')),
                     status INTEGER NOT NULL DEFAULT 0,
                     in_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                     out_time DATETIME,
@@ -69,16 +81,19 @@ class DatabaseManager:
                 )
             ''')
 
-            # 4. 华为云站点累计值（单例行）
+            # 4. 每日取件分类计数
+            cursor.execute('DROP TABLE IF EXISTS station_counters')
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS station_counters (
-                    singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
-                    counter_a INTEGER NOT NULL DEFAULT 0 CHECK (counter_a BETWEEN 0 AND 2147483647),
-                    counter_b INTEGER NOT NULL DEFAULT 0 CHECK (counter_b BETWEEN 0 AND 2147483647)
+                CREATE TABLE IF NOT EXISTS parcel_daily_counters (
+                    business_date TEXT PRIMARY KEY,
+                    target_a_count INTEGER NOT NULL DEFAULT 0 CHECK (target_a_count BETWEEN 0 AND 2147483647),
+                    target_b_count INTEGER NOT NULL DEFAULT 0 CHECK (target_b_count BETWEEN 0 AND 2147483647),
+                    report_status TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (report_status IN ('pending', 'publishing', 'published')),
+                    published_at DATETIME,
+                    last_error TEXT,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            cursor.execute('''
-                INSERT OR IGNORE INTO station_counters (singleton_id, counter_a, counter_b)
-                VALUES (1, 0, 0)
-            ''')
+            cursor.execute(f'PRAGMA user_version = {cls.SCHEMA_VERSION}')
             conn.commit()

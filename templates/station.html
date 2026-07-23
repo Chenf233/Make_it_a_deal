@@ -580,6 +580,7 @@
                 <div class="result-row"><span>快递公司</span><strong>${parcel.company || "--"}</strong></div>
                 <div class="result-row"><span>收件人</span><strong>${parcel.receiver_name || "--"}</strong></div>
                 <div class="result-row"><span>手机号</span><strong>${parcel.receiver_phone || "--"}</strong></div>
+                <div class="result-row"><span>目标位置</span><strong>${parcel.target_location || "--"}</strong></div>
                 <div class="result-row"><span>${inboundState === "preview" ? "预分配货柜" : "入库货柜"}</span><strong>${parcel.cabinet_number || "--"}</strong></div>
             `;
         }

@@ -45,6 +45,7 @@ DUMMY_PARCELS = [
         "tracking_no": "JD123456789",
         "cabinet_number": "",  # 入库时将自动分配（测试时不设固定值）
         "receiver_phone": "13800138000",
+        "target_location": "A",
         "status": 1,
         "extra_info": {"company": "京东", "location": "货架1-A", "weight": "2kg"}
     },
@@ -52,6 +53,7 @@ DUMMY_PARCELS = [
         "tracking_no": "SF987654321",
         "cabinet_number": "",
         "receiver_phone": "13800138000",
+        "target_location": "B",
         "status": 1,
         "extra_info": {"company": "顺丰", "location": "货架2-B"}
     },
@@ -59,6 +61,7 @@ DUMMY_PARCELS = [
         "tracking_no": "ZT111222333",
         "cabinet_number": "",
         "receiver_phone": "13900139000",
+        "target_location": "A",
         "status": 1,
         "extra_info": {"company": "中通"}
     }

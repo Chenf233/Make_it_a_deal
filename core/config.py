@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     HUAWEI_IOT_EXECUTABLE: str = "services/huaweicloud-iot-device-sdk-c-master-mine/station_iotd"
     HUAWEI_IOT_CONFIG: str = "services/huaweicloud-iot-device-sdk-c-master-mine/station_iotd.json"
     HUAWEI_IOT_REQUEST_TIMEOUT: float = 5.0
+    HUAWEI_IOT_DAILY_SERVICE_ID: str = "Station_1"
+    HUAWEI_IOT_DAILY_PROPERTY_A: str = "A_parcels_per_D"
+    HUAWEI_IOT_DAILY_PROPERTY_B: str = "B_parcels_per_D"
+    HUAWEI_IOT_BUSINESS_TIMEZONE: str = "Asia/Shanghai"
 
     class Config:
         env_file = ".env"
