@@ -315,6 +315,10 @@ body {
     margin-bottom: 16px;
 }
 
+.form-group.hidden {
+    display: none;
+}
+
 .form-group label {
     display: block;
     margin-bottom: 6px;
@@ -324,6 +328,7 @@ body {
 
 .form-group input[type="text"],
 .form-group input[type="file"],
+.form-group input[type="datetime-local"],
 .form-group select {
     width: 100%;
     padding: 8px 12px;
