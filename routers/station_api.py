@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 import asyncio
 import cv2
 import logging
+import secrets
 import time
 import uuid
 
@@ -72,6 +73,7 @@ def build_scan_result(qr_data: dict, parcel_dict: dict) -> ScanResultData:
         company=qr_data.get("company", "未知"),
         receiver_name=qr_data.get("receiver_name", "未知"),
         receiver_phone=qr_data["receiver_phone"],
+        target_location=qr_data["target_location"],
         cabinet_number=parcel_dict["cabinet_number"],
         is_new_user=False
     )
@@ -84,6 +86,7 @@ def build_preview_data(token: str, qr_data: dict, cabinet_number: str) -> dict:
         "company": qr_data.get("company", "未知"),
         "receiver_name": qr_data.get("receiver_name", "未知"),
         "receiver_phone": qr_data["receiver_phone"],
+        "target_location": qr_data["target_location"],
         "cabinet_number": cabinet_number,
     }
 
@@ -118,11 +121,29 @@ def validate_inbound_qr(qr_data: dict) -> APIResponse | None:
     return None
 
 
+def normalize_inbound_target_location(qr_data: dict) -> APIResponse | None:
+    if "target_location" not in qr_data:
+        qr_data["target_location"] = secrets.choice(("A", "B"))
+        return None
+
+    target_location = qr_data["target_location"]
+    if not isinstance(target_location, str):
+        return APIResponse(code=400, message="二维码中的目标位置无效，仅支持 A 或 B")
+
+    target_location = target_location.strip().upper()
+    if target_location not in {"A", "B"}:
+        return APIResponse(code=400, message="二维码中的目标位置无效，仅支持 A 或 B")
+
+    qr_data["target_location"] = target_location
+    return None
+
+
 def create_parcel_from_qr(qr_data: dict, cabinet_number: str) -> dict:
     return ParcelRepository.add_parcel(
         tracking_no=qr_data["tracking_no"],
         receiver_phone=qr_data["receiver_phone"],
         cabinet_number=cabinet_number,
+        target_location=qr_data["target_location"],
         status=1,
         extra_info={
             "company": qr_data.get("company", "未知"),
@@ -173,6 +194,9 @@ async def preview_scan_in(request: Request):
 
     qr_data = qr_result
     invalid_response = validate_inbound_qr(qr_data)
+    if invalid_response:
+        return invalid_response
+    invalid_response = normalize_inbound_target_location(qr_data)
     if invalid_response:
         return invalid_response
 
@@ -253,6 +277,7 @@ async def move_to_a02():#注：目前演示只做了移动到某一特定柜前�
             tracking_no=data["tracking_no"],
             receiver_phone=data["receiver_phone"],
             cabinet_number="A02",
+            target_location=data["target_location"],
             extra_info={"company": data["company"], "receiver_name": data["receiver_name"]}
         )
 

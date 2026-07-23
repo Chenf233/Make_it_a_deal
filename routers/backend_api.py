@@ -9,7 +9,7 @@ import asyncio
 import logging
 import json
 from datetime import datetime
-from typing import Optional, List
+from typing import Literal, Optional, List
 
 import cv2
 import numpy as np
@@ -210,6 +210,7 @@ async def get_parcels(
             company=extra.get("company", "未知"),
             receiver_name=receiver_name,
             receiver_phone=receiver_phone,
+            target_location=p["target_location"],
             cabinet_number=p.get("cabinet_number", ""),
             status=p["status"],
             in_time=p["in_time"],
@@ -225,6 +226,7 @@ class ParcelCreateRequest(BaseModel):
     cabinet_number: Optional[str] = Field("", max_length=20)
     company: Optional[str] = Field("未知", max_length=50)
     receiver_name: Optional[str] = Field("", max_length=50)
+    target_location: Literal["A", "B"] = "A"
     status: Optional[int] = Field(1, ge=1, le=3)
 
 
@@ -234,6 +236,7 @@ class ParcelUpdateRequest(BaseModel):
     cabinet_number: Optional[str] = Field(None, max_length=20)
     company: Optional[str] = Field(None, max_length=50)
     receiver_name: Optional[str] = Field(None, max_length=50)
+    target_location: Optional[Literal["A", "B"]] = None
     status: Optional[int] = Field(None, ge=1, le=3)
 
 
@@ -244,6 +247,7 @@ async def create_parcel(payload: ParcelCreateRequest):
             tracking_no=payload.tracking_no,
             cabinet_number=payload.cabinet_number or "",
             receiver_phone=payload.receiver_phone,
+            target_location=payload.target_location,
             status=payload.status,
             extra_info={"company": payload.company, "receiver_name": payload.receiver_name}
         )
@@ -257,6 +261,7 @@ async def create_parcel(payload: ParcelCreateRequest):
         "parcel_id": parcel_dict["parcel_id"],
         "tracking_no": parcel_dict["tracking_no"],
         "cabinet_number": parcel_dict["cabinet_number"],
+        "target_location": parcel_dict["target_location"],
     })
 
 
@@ -274,6 +279,7 @@ async def get_parcel(parcel_id: int):
         company=extra.get("company", "未知"),
         receiver_name=extra.get("receiver_name", "未知"),
         receiver_phone=p["receiver_phone"],
+        target_location=p["target_location"],
         cabinet_number=p.get("cabinet_number", ""),
         status=p["status"],
         in_time=p["in_time"],
@@ -286,6 +292,8 @@ async def update_parcel(parcel_id: int, payload: ParcelUpdateRequest):
     existing = ParcelRepository.get_parcel_by_id(parcel_id)
     if not existing:
         return APIResponse(code=404, message="包裹不存在")
+    if payload.target_location is not None and existing["status"] != 1:
+        return APIResponse(code=400, message="已取件或异常包裹不能修改目标类别")
 
     extra_info = existing.get("extra_info") or {}
     if isinstance(extra_info, str):
@@ -301,6 +309,7 @@ async def update_parcel(parcel_id: int, payload: ParcelUpdateRequest):
             tracking_no=payload.tracking_no,
             receiver_phone=payload.receiver_phone,
             cabinet_number=payload.cabinet_number,
+            target_location=payload.target_location,
             status=payload.status,
             extra_info=extra_info if (payload.company is not None or payload.receiver_name is not None) else None
         )

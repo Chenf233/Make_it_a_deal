@@ -1,6 +1,7 @@
 import json
 import random
-from datetime import datetime
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 import numpy as np
 from database.db_manager import DatabaseManager
 from database.constants import (
@@ -163,11 +164,14 @@ class ParcelRepository:
 
     @staticmethod
     def add_parcel(tracking_no: str, cabinet_number: str = "", receiver_phone: str = "",
-                   status: int = 1, extra_info: dict = None) -> dict:
+                   target_location: str = "", status: int = 1, extra_info: dict = None) -> dict:
         """
         包裹入库。若 cabinet_number 为空则自动分配。
         返回新增包裹的完整信息字典（含 cabinet_number）。
         """
+        target_location = target_location.upper()
+        if target_location not in {"A", "B"}:
+            raise ValueError("包裹目标类别必须是 A 或 B")
         extra_str = json.dumps(extra_info or {})
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with DatabaseManager.get_connection() as conn:
@@ -178,9 +182,12 @@ class ParcelRepository:
                 cabinet_number = _generate_cabinet_number(occupied)
             pickup_code = cabinet_number
             cursor.execute('''
-                INSERT INTO parcels (tracking_no, pickup_code, cabinet_number, receiver_phone, status, extra_info, in_time) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (tracking_no, pickup_code, cabinet_number, receiver_phone, status, extra_str, now_str))
+                INSERT INTO parcels (
+                    tracking_no, pickup_code, cabinet_number, receiver_phone,
+                    target_location, status, extra_info, in_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (tracking_no, pickup_code, cabinet_number, receiver_phone,
+                  target_location, status, extra_str, now_str))
             conn.commit()
             new_id = cursor.lastrowid
             # 查询完整信息返回
@@ -193,7 +200,8 @@ class ParcelRepository:
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT parcel_id, tracking_no, cabinet_number, receiver_phone, status, in_time, out_time, extra_info
+                SELECT parcel_id, tracking_no, cabinet_number, receiver_phone, target_location,
+                       status, in_time, out_time, extra_info
                 FROM parcels 
                 WHERE receiver_phone = ?
                 ORDER BY in_time DESC
@@ -205,6 +213,7 @@ class ParcelRepository:
                     "tracking_no": row['tracking_no'],
                     "cabinet_number": row['cabinet_number'],
                     "receiver_phone": row['receiver_phone'],
+                    "target_location": row['target_location'],
                     "status": row['status'],
                     "in_time": row['in_time'],
                     "out_time": row['out_time'],
@@ -217,7 +226,8 @@ class ParcelRepository:
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT parcel_id, tracking_no, cabinet_number, receiver_phone, status, in_time, out_time, extra_info
+                SELECT parcel_id, tracking_no, cabinet_number, receiver_phone, target_location,
+                       status, in_time, out_time, extra_info
                 FROM parcels 
                 WHERE receiver_phone = ? AND status = 1
             ''', (phone,))
@@ -228,6 +238,7 @@ class ParcelRepository:
                     "tracking_no": row['tracking_no'],
                     "cabinet_number": row['cabinet_number'],
                     "receiver_phone": row['receiver_phone'],
+                    "target_location": row['target_location'],
                     "status": row['status'],
                     "in_time": row['in_time'],
                     "out_time": row['out_time'],
@@ -240,7 +251,8 @@ class ParcelRepository:
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT parcel_id, tracking_no, pickup_code, cabinet_number, receiver_phone, status, in_time, out_time, extra_info 
+                SELECT parcel_id, tracking_no, pickup_code, cabinet_number, receiver_phone,
+                       target_location, status, in_time, out_time, extra_info
                 FROM parcels 
                 ORDER BY in_time DESC LIMIT ? OFFSET ?
             ''', (limit, offset))
@@ -259,6 +271,50 @@ class ParcelRepository:
                                (new_status, parcel_id))
             conn.commit()
             return cursor.rowcount > 0
+
+    @staticmethod
+    def complete_pickup_and_increment(parcel_id: int, now: datetime | None = None) -> dict | None:
+        now = now or datetime.now(ZoneInfo("Asia/Shanghai"))
+        out_time = now.strftime("%Y-%m-%d %H:%M:%S")
+        business_date = now.date().isoformat()
+        with DatabaseManager.get_connection() as conn:
+            cursor = conn.cursor()
+            row = cursor.execute(
+                "SELECT target_location FROM parcels WHERE parcel_id = ? AND status = 1",
+                (parcel_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            target_location = row["target_location"]
+            column = "target_a_count" if target_location == "A" else "target_b_count"
+            cursor.execute(
+                "UPDATE parcels SET status = 2, out_time = ? WHERE parcel_id = ? AND status = 1",
+                (out_time, parcel_id),
+            )
+            if cursor.rowcount != 1:
+                return None
+            cursor.execute('''
+                INSERT INTO parcel_daily_counters (business_date)
+                VALUES (?) ON CONFLICT(business_date) DO NOTHING
+            ''', (business_date,))
+            cursor.execute(f'''
+                UPDATE parcel_daily_counters
+                SET {column} = {column} + 1,
+                    report_status = 'pending', published_at = NULL,
+                    last_error = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE business_date = ?
+            ''', (business_date,))
+            counts = cursor.execute('''
+                SELECT target_a_count, target_b_count
+                FROM parcel_daily_counters WHERE business_date = ?
+            ''', (business_date,)).fetchone()
+            conn.commit()
+            return {
+                "business_date": business_date,
+                "target_location": target_location,
+                "target_a_count": counts["target_a_count"],
+                "target_b_count": counts["target_b_count"],
+            }
 
     @staticmethod
     def delete_parcel(parcel_id: int) -> bool:
@@ -281,7 +337,7 @@ class ParcelRepository:
     @staticmethod
     def update_parcel(parcel_id: int, tracking_no: str = None, receiver_phone: str = None,
                       cabinet_number: str = None, status: int = None,
-                      extra_info: dict = None) -> bool:
+                      extra_info: dict = None, target_location: str = None) -> bool:
         set_parts = []
         params = []
         if tracking_no is not None:
@@ -293,6 +349,12 @@ class ParcelRepository:
         if cabinet_number is not None:
             set_parts.append("cabinet_number = ?")
             params.append(cabinet_number)
+        if target_location is not None:
+            target_location = target_location.upper()
+            if target_location not in {"A", "B"}:
+                raise ValueError("包裹目标类别必须是 A 或 B")
+            set_parts.append("target_location = ?")
+            params.append(target_location)
         if status is not None:
             set_parts.append("status = ?")
             params.append(status)
@@ -368,77 +430,67 @@ class AccessLogRepository:
             conn.commit()
             return cursor.rowcount > 0
 
-
-class StationCounterRepository:
-    _COLUMNS = {
-        "a": "counter_a",
-        "b": "counter_b",
-    }
+class ParcelDailyCounterRepository:
+    @staticmethod
+    def ensure_date(business_date: date | str) -> dict:
+        value = business_date.isoformat() if isinstance(business_date, date) else business_date
+        with DatabaseManager.get_connection() as conn:
+            conn.execute('''
+                INSERT INTO parcel_daily_counters (business_date)
+                VALUES (?) ON CONFLICT(business_date) DO NOTHING
+            ''', (value,))
+            row = conn.execute(
+                "SELECT * FROM parcel_daily_counters WHERE business_date = ?", (value,)
+            ).fetchone()
+            conn.commit()
+            return dict(row)
 
     @staticmethod
-    def _row_to_dict(row) -> dict:
-        return {
-            "counter_a": row["counter_a"],
-            "counter_b": row["counter_b"],
-        }
-
-    @classmethod
-    def get_counters(cls) -> dict:
+    def get(business_date: date | str) -> dict | None:
+        value = business_date.isoformat() if isinstance(business_date, date) else business_date
         with DatabaseManager.get_connection() as conn:
-            row = conn.execute('''
-                SELECT counter_a, counter_b
-                FROM station_counters
-                WHERE singleton_id = 1
-            ''').fetchone()
-            if row is None:
-                raise RuntimeError("站点计数器尚未初始化")
-            return cls._row_to_dict(row)
+            row = conn.execute(
+                "SELECT * FROM parcel_daily_counters WHERE business_date = ?", (value,)
+            ).fetchone()
+            return dict(row) if row else None
 
-    @classmethod
-    def set_counter(cls, station: str, value: int) -> dict:
-        column = cls._COLUMNS.get(station.lower())
-        if column is None:
-            raise ValueError(f"未知站点：{station}")
-        if value < 0 or value > 2147483647:
-            raise ValueError("站点累计值必须位于 0 到 2147483647 之间")
-
+    @staticmethod
+    def list_before(before_date: date | str, pending_only: bool = False) -> list[dict]:
+        value = before_date.isoformat() if isinstance(before_date, date) else before_date
+        query = "SELECT * FROM parcel_daily_counters WHERE business_date < ?"
+        if pending_only:
+            query += " AND report_status != 'published'"
+        query += " ORDER BY business_date"
         with DatabaseManager.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                f"UPDATE station_counters SET {column} = ? WHERE singleton_id = 1",
-                (value,),
-            )
-            cursor.execute('''
-                SELECT counter_a, counter_b
-                FROM station_counters
-                WHERE singleton_id = 1
-            ''')
-            row = cursor.fetchone()
+            return [dict(row) for row in conn.execute(query, (value,)).fetchall()]
+
+    @staticmethod
+    def mark_publishing(business_date: str):
+        with DatabaseManager.get_connection() as conn:
+            conn.execute('''
+                UPDATE parcel_daily_counters
+                SET report_status = 'publishing', last_error = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE business_date = ?
+            ''', (business_date,))
             conn.commit()
-            return cls._row_to_dict(row)
 
-    @classmethod
-    def increment_counter(cls, station: str) -> dict:
-        column = cls._COLUMNS.get(station.lower())
-        if column is None:
-            raise ValueError(f"未知站点：{station}")
-
+    @staticmethod
+    def mark_published(business_date: str):
         with DatabaseManager.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                f"SELECT {column} FROM station_counters WHERE singleton_id = 1"
-            )
-            current = cursor.fetchone()[column]
-            if current >= 2147483647:
-                raise OverflowError("站点累计值已达到最大值，请先通过设置接口调整")
-            cursor.execute(
-                f"UPDATE station_counters SET {column} = {column} + 1 WHERE singleton_id = 1"
-            )
-            cursor.execute('''
-                SELECT counter_a, counter_b
-                FROM station_counters
-                WHERE singleton_id = 1
-            ''')
-            row = cursor.fetchone()
+            conn.execute('''
+                UPDATE parcel_daily_counters
+                SET report_status = 'published', published_at = CURRENT_TIMESTAMP,
+                    last_error = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE business_date = ?
+            ''', (business_date,))
             conn.commit()
-            return cls._row_to_dict(row)
+
+    @staticmethod
+    def mark_failed(business_date: str, error: str):
+        with DatabaseManager.get_connection() as conn:
+            conn.execute('''
+                UPDATE parcel_daily_counters
+                SET report_status = 'pending', last_error = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE business_date = ?
+            ''', (error, business_date))
+            conn.commit()

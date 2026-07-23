@@ -28,7 +28,7 @@ class HuaweiIoTProcessManagerTests(unittest.IsolatedAsyncioTestCase):
         self.manager = HuaweiIoTProcessManager()
 
     async def asyncTearDown(self):
-        for task in (self.manager._report_task, self.manager._resync_task):
+        for task in (self.manager._report_task,):
             if task and not task.done():
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
@@ -40,12 +40,11 @@ class HuaweiIoTProcessManagerTests(unittest.IsolatedAsyncioTestCase):
         self.manager._handle_message({
             "event": "published",
             "id": "report-1",
-            "station": "A",
-            "value": 1,
+            "service_id": "Station_1",
         })
 
         self.assertFalse(future.done())
-        self.assertEqual(self.manager.get_status()["last_destination"], "A")
+        self.assertEqual(self.manager.get_status()["last_service_id"], "Station_1")
         self.assertEqual(self.manager.get_status()["last_publish_result"], "success")
 
         self.manager._handle_message({
@@ -58,12 +57,9 @@ class HuaweiIoTProcessManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response["result"], "queued")
 
     async def test_connection_events_update_status(self):
-        self.manager._resync_current_counters = AsyncMock()
-
         self.manager._handle_message({"event": "ready", "state": "connecting"})
         await asyncio.sleep(0)
         self.assertTrue(self.manager._ready.is_set())
-        self.manager._resync_current_counters.assert_awaited_once()
 
         self.manager._handle_message({"event": "connection", "state": "connected"})
         self.assertEqual(self.manager.get_status()["connection_state"], "connected")
@@ -77,12 +73,12 @@ class HuaweiIoTProcessManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status["connection_state"], "disconnected")
         self.assertEqual(status["last_error"], "connection_lost")
 
-    async def test_report_station_validation_and_disabled_mode(self):
+    async def test_report_properties_validation_and_disabled_mode(self):
         with self.assertRaises(ValueError):
-            await self.manager.report_station("C", 1)
+            await self.manager.report_properties("", {})
 
         with patch("services.huawei_iot.process_manager.settings.HUAWEI_IOT_ENABLED", False):
-            report_id = await self.manager.report_station("A", 1)
+            report_id = await self.manager.report_properties("Station_1", {"count": 1})
 
         self.assertIsNone(report_id)
         self.assertTrue(self.manager._reports.empty())
@@ -90,17 +86,17 @@ class HuaweiIoTProcessManagerTests(unittest.IsolatedAsyncioTestCase):
     async def test_report_requires_running_manager(self):
         with patch("services.huawei_iot.process_manager.settings.HUAWEI_IOT_ENABLED", True):
             with self.assertRaisesRegex(RuntimeError, "未运行"):
-                await self.manager.report_station("A", 1)
+                await self.manager.report_properties("Station_1", {"count": 1})
 
     async def test_request_writes_ndjson_and_correlates_response(self):
         self.manager._process = FakeProcess()
 
         request_task = asyncio.create_task(self.manager._request(
-            "report_station",
+            "report_properties",
             request_id="report-1",
             timeout=1,
-            station="A",
-            value=5,
+            service_id="Station_1",
+            properties={"count": 5},
         ))
         await self._wait_until(lambda: "report-1" in self.manager._pending)
 
@@ -108,9 +104,9 @@ class HuaweiIoTProcessManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(encoded.endswith(b"\n"))
         self.assertEqual(json.loads(encoded), {
             "id": "report-1",
-            "op": "report_station",
-            "station": "A",
-            "value": 5,
+            "op": "report_properties",
+            "service_id": "Station_1",
+            "properties": {"count": 5},
         })
 
         self.manager._handle_message({
@@ -135,8 +131,8 @@ class HuaweiIoTProcessManagerTests(unittest.IsolatedAsyncioTestCase):
         self.manager._ready.set()
         self.manager._report_task = asyncio.create_task(self.manager._dispatch_reports())
 
-        await self.manager._reports.put({"id": "bad-1", "station": "A", "value": 1})
-        await self.manager._reports.put({"id": "good-2", "station": "B", "value": 2})
+        await self.manager._reports.put({"id": "bad-1", "service_id": "S1", "properties": {"a": 1}})
+        await self.manager._reports.put({"id": "good-2", "service_id": "S2", "properties": {"b": 2}})
 
         await self._wait_until(lambda: "bad-1" in self.manager._pending)
         self.manager._handle_message({

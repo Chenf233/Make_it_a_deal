@@ -54,20 +54,21 @@ def simulate_frontend_requests():
     assigned_cabinets = []
     for i, p in enumerate(DUMMY_PARCELS):
         try:
-            pid = ParcelRepository.add_parcel(
+            parcel = ParcelRepository.add_parcel(
                 tracking_no=p["tracking_no"],
                 cabinet_number="",  # 自动分配
                 receiver_phone=p["receiver_phone"],
+                target_location=p["target_location"],
                 status=p.get("status", 1),
                 extra_info=p.get("extra_info")
             )
             # 获取刚插入的包裹信息，查看分配的柜号
             with DatabaseManager.get_connection() as conn:
                 cur = conn.cursor()
-                cur.execute("SELECT cabinet_number FROM parcels WHERE parcel_id = ?", (pid,))
+                cur.execute("SELECT cabinet_number FROM parcels WHERE parcel_id = ?", (parcel["parcel_id"],))
                 cab = cur.fetchone()["cabinet_number"]
             assigned_cabinets.append(cab)
-            print(f"   [+] 包裹 {p['tracking_no']} 入库成功，货柜号={cab}, parcel_id={pid}")
+            print(f"   [+] 包裹 {p['tracking_no']} 入库成功，货柜号={cab}, parcel_id={parcel['parcel_id']}")
         except Exception as e:
             print(f"   [-] 包裹 {p['tracking_no']} 入库失败: {e}")
 
@@ -77,6 +78,7 @@ def simulate_frontend_requests():
         ParcelRepository.add_parcel(
             tracking_no=DUMMY_PARCELS[0]["tracking_no"],
             receiver_phone=DUMMY_PARCELS[0]["receiver_phone"],
+            target_location=DUMMY_PARCELS[0]["target_location"],
             extra_info={}
         )
         print("   [!] 未触发异常，请检查唯一约束")
@@ -105,7 +107,7 @@ def simulate_frontend_requests():
     print("\n--- 5. 客户取件 ---")
     picked = []
     for p in active:
-        success = ParcelRepository.update_parcel_status(p['parcel_id'], 2)
+        success = ParcelRepository.complete_pickup_and_increment(p['parcel_id'])
         if success:
             picked.append(p['cabinet_number'])
             print(f"   [+] 包裹 {p['cabinet_number']} 状态已更新为'已取件'")
@@ -153,6 +155,7 @@ def simulate_frontend_requests():
                 tracking_no=fake_tracking,
                 cabinet_number="",
                 receiver_phone="13800138000",
+                target_location="A",
                 status=1,
                 extra_info={"test": True}
             )

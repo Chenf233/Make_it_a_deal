@@ -22,15 +22,16 @@ class HuaweiIoTProcessManager:
         self._stopping = False
         self._ready = asyncio.Event()
         self._write_lock = asyncio.Lock()
-        self._counter_lock = asyncio.Lock()
         self._pending = {}
+        self._publish_waiters = {}
+        self._publish_results = {}
         self._reports = asyncio.Queue()
         self._state = {
             "enabled": settings.HUAWEI_IOT_ENABLED,
             "process_running": False,
             "pid": None,
             "connection_state": "disabled" if not settings.HUAWEI_IOT_ENABLED else "stopped",
-            "last_destination": None,
+            "last_service_id": None,
             "last_publish_result": None,
             "last_error": None,
             "pending_reports": 0,
@@ -76,6 +77,7 @@ class HuaweiIoTProcessManager:
                     await task
 
         self._fail_pending(RuntimeError("华为云 IoT 子进程已停止"))
+        self._fail_publish_waiters(RuntimeError("华为云 IoT 子进程已停止"))
         self._process = None
         self._supervisor_task = None
         self._report_task = None
@@ -84,35 +86,36 @@ class HuaweiIoTProcessManager:
         self._resync_task = None
         self._state.update({"process_running": False, "pid": None, "connection_state": "stopped"})
 
-    async def report_station(self, station: str, value: int):
-        station = station.upper()
-        if station not in {"A", "B"}:
-            raise ValueError(f"未知站点：{station}")
+    async def report_properties(self, service_id: str, properties: dict, request_id: str | None = None):
+        if not service_id or not isinstance(properties, dict) or not properties:
+            raise ValueError("service_id 和 properties 不能为空")
         if not settings.HUAWEI_IOT_ENABLED:
-            logger.info("华为云 IoT 已禁用，跳过 %s 地累计值 %s 的上报", station, value)
+            logger.info("华为云 IoT 已禁用，跳过服务 %s 的属性上报", service_id)
             return None
         if self._supervisor_task is None or self._stopping:
             raise RuntimeError("华为云 IoT 子进程管理器未运行")
-        report_id = f"station-{station.lower()}-{uuid.uuid4().hex}"
-        await self._reports.put({"id": report_id, "station": station, "value": value})
+        report_id = request_id or f"properties-{uuid.uuid4().hex}"
+        await self._reports.put({
+            "id": report_id,
+            "service_id": service_id,
+            "properties": properties,
+        })
         return report_id
 
-    async def increment_and_report(self, station: str):
-        from database.models import StationCounterRepository
-
-        async with self._counter_lock:
-            counters = await asyncio.to_thread(StationCounterRepository.increment_counter, station)
-            value = counters[f"counter_{station.lower()}"]
-            report_id = await self.report_station(station, value)
-            return counters, report_id
-
-    async def set_and_report(self, station: str, value: int):
-        from database.models import StationCounterRepository
-
-        async with self._counter_lock:
-            counters = await asyncio.to_thread(StationCounterRepository.set_counter, station, value)
-            report_id = await self.report_station(station, value)
-            return counters, report_id
+    async def wait_for_publish(self, request_id: str, timeout: float | None = None):
+        completed = self._publish_results.pop(request_id, None)
+        if completed:
+            if completed.get("event") == "published":
+                return completed
+            raise RuntimeError(completed.get("error", "属性发布失败"))
+        future = asyncio.get_running_loop().create_future()
+        self._publish_waiters[request_id] = future
+        try:
+            return await asyncio.wait_for(
+                future, timeout=timeout or max(settings.HUAWEI_IOT_REQUEST_TIMEOUT * 4, 20.0)
+            )
+        finally:
+            self._publish_waiters.pop(request_id, None)
 
     async def _supervise(self):
         backoff = 1
@@ -213,27 +216,21 @@ class HuaweiIoTProcessManager:
         if event == "ready":
             self._ready.set()
             self._state["connection_state"] = message.get("state", "connecting")
-            if self._resync_task is None or self._resync_task.done():
-                self._resync_task = asyncio.create_task(self._resync_current_counters())
         elif event == "connection":
             self._state["connection_state"] = message.get("state", "unknown")
             self._state["last_error"] = message.get("error")
         elif event in {"published", "publish_failed"}:
-            self._state["last_destination"] = message.get("station")
+            self._state["last_service_id"] = message.get("service_id")
             self._state["last_publish_result"] = "success" if event == "published" else "failed"
             self._state["last_error"] = message.get("error")
-
-    async def _resync_current_counters(self):
-        try:
-            from database.models import StationCounterRepository
-
-            async with self._counter_lock:
-                counters = await asyncio.to_thread(StationCounterRepository.get_counters)
-                await self.report_station("A", counters["counter_a"])
-                await self.report_station("B", counters["counter_b"])
-            logger.info("已将 A/B 当前累计值加入华为云同步队列")
-        except Exception:
-            logger.exception("同步 A/B 当前累计值失败")
+            waiter = self._publish_waiters.get(message.get("id"))
+            if waiter and not waiter.done():
+                if event == "published":
+                    waiter.set_result(message)
+                else:
+                    waiter.set_exception(RuntimeError(message.get("error", "属性发布失败")))
+            elif message.get("id"):
+                self._publish_results[message["id"]] = message
 
     async def _dispatch_reports(self):
         while True:
@@ -243,10 +240,10 @@ class HuaweiIoTProcessManager:
                     await self._ready.wait()
                     try:
                         response = await self._request(
-                            "report_station",
+                            "report_properties",
                             request_id=report["id"],
-                            station=report["station"],
-                            value=report["value"],
+                            service_id=report["service_id"],
+                            properties=report["properties"],
                         )
                         if response.get("ok"):
                             break
@@ -283,6 +280,12 @@ class HuaweiIoTProcessManager:
             if not future.done():
                 future.set_exception(exc)
         self._pending.clear()
+
+    def _fail_publish_waiters(self, exc):
+        for future in self._publish_waiters.values():
+            if not future.done():
+                future.set_exception(exc)
+        self._publish_waiters.clear()
 
     @staticmethod
     def _resolve_path(value):

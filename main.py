@@ -19,11 +19,12 @@ from services.camera_manager import get_camera
 from services.face_recognition import FaceRecognizer
 from services.hardware_manager import init as init_cabinet_hardware, lock_all_cabinets
 from services.huawei_iot import huawei_iot
+from services.huawei_iot.daily_report import daily_parcel_reports
 from services.motor import stop_all_wheels
 from services.scanner import QRScanner
 
 # 导入路由 (稍后我们将实现这些文件)
-from routers import backend_api, station_api, client_api, wheel_api
+from routers import backend_api, station_api, client_api, iot_api, wheel_api
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -60,6 +61,7 @@ async def lifespan(app: FastAPI):
     app_state.build_face_cache(active_users)
 
     await huawei_iot.start()
+    await daily_parcel_reports.start()
     logger.info("华为云 IoT 子进程管理器已启动。")
     logger.info("=== 系统启动完毕，准备接收请求 ===")
 
@@ -76,6 +78,7 @@ async def lifespan(app: FastAPI):
             logger.exception("轮子电机停止失败。")
 
         try:
+            await daily_parcel_reports.stop()
             await huawei_iot.stop()
             logger.info("华为云 IoT 子进程已停止。")
         except Exception:
@@ -168,3 +171,4 @@ app.include_router(backend_api.router, prefix="/api")
 app.include_router(station_api.router, prefix="/api")
 app.include_router(client_api.router, prefix="/api")
 app.include_router(wheel_api.router, prefix="/api")
+app.include_router(iot_api.router, prefix="/api")

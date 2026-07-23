@@ -5,17 +5,28 @@ FastAPI lifespan. The child process owns the Huawei C SDK connection. Python
 and C communicate with newline-delimited JSON over stdin/stdout; SDK logs are
 written to stderr.
 
-## Product Model
+## Native Protocol
 
-The native process reports integer values with these fixed mappings:
+`station_iotd` accepts one JSON object per stdin line. Property reports use a
+generic service ID and retain the complete properties object, including string,
+number, boolean, null, array, and nested object values:
 
-| Station | Huawei service ID | Property |
-| --- | --- | --- |
-| A | `Station_1` | `A parcels per D` |
-| B | `Station_2` | `B parcels per D` |
+```json
+{"op":"report_properties","id":"report-42","service_id":"parcel_counters","properties":{"count":12,"active":true,"note":null}}
+```
 
-Successful automatic arrival increments the corresponding SQLite value by one
-and queues the new absolute value for reporting. Values are not reset by date.
+The daemon returns `queued` or `already_queued` when it accepts the request,
+then emits `published` or `publish_failed` after the Huawei SDK callback. The
+publish event contains the request `id` and `service_id`:
+
+```json
+{"id":"report-42","ok":true,"result":"queued"}
+{"event":"published","id":"report-42","service_id":"parcel_counters"}
+```
+
+Reports are queued while disconnected and only one report is in flight at a
+time. stdout is reserved for NDJSON protocol messages; SDK and daemon logs are
+written to stderr.
 
 ## Build On RDK Linux
 
@@ -55,13 +66,17 @@ GPIO, in-memory wheel state, and one Huawei device connection.
 ## API
 
 ```text
-GET /api/wheels/counters
-PUT /api/wheels/counters/a  {"value": 10}
-PUT /api/wheels/counters/b  {"value": 20}
-GET /api/wheels/iot-status
+GET /api/iot/daily-counters
+GET /api/iot/daily-counters?business_date=2026-07-22
+POST /api/iot/daily-sync  {"business_date":"2026-07-22","force":true}
+GET /api/iot/status
 ```
 
-Setting a value persists it and queues that absolute value for cloud reporting.
+Picked-up parcels are counted by `target_location` for each Asia/Shanghai
+business date. After midnight, Python reports the previous day's values to
+`Station_1` using `A_parcels_per_D` and `B_parcels_per_D`. Startup retries
+unfinished historical reports. The manual sync endpoint is intended for
+diagnostics and only accepts completed business dates.
 
 ## Tests
 
@@ -77,8 +92,9 @@ any existing `station_iotd` process have been stopped. The test scans `/proc`
 and fails before connecting if it finds SmartStation, Uvicorn `main:app`, or
 another `station_iotd` process.
 
-It reads the current A/B values from SQLite and reports those exact values, so
-the test does not increment or otherwise change the local counters:
+It reads the previous business day's A/B values from SQLite and reports those
+exact values in one generic property report, so the test does not increment or
+otherwise change the local counters:
 
 ```sh
 RUN_HUAWEI_IOT_INTEGRATION_TEST=1 \
@@ -95,6 +111,6 @@ HUAWEI_IOT_PUBLISH_TIMEOUT=20
 ```
 
 The real test verifies dynamic dependencies, certificate/configuration,
-authentication, A publish, B publish, status, and graceful shutdown. A
+authentication, property publish, status, and graceful shutdown. A
 `published` event confirms MQTT publish completion; the IoTDA console should
 still be checked once to confirm the product model displays both properties.
