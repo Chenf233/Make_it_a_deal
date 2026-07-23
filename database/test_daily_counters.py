@@ -106,7 +106,7 @@ class ParcelDailyCounterTests(unittest.TestCase):
         out_time = datetime.strptime(original["out_time"], "%Y-%m-%d %H:%M:%S")
         invalid_in_time = out_time.replace(year=out_time.year + 1).strftime("%Y-%m-%d %H:%M:%S")
 
-        with self.assertRaisesRegex(ValueError, "入库时间不能晚于取件时间"):
+        with self.assertRaisesRegex(ValueError, "入库时间不能晚于出库时间"):
             ParcelRepository.update_parcel(
                 parcel["parcel_id"], in_time=invalid_in_time
             )
@@ -120,7 +120,7 @@ class ParcelDailyCounterTests(unittest.TestCase):
             receiver_phone="13800000004", target_location="A"
         )
 
-        with self.assertRaisesRegex(ValueError, "入库时间不能晚于取件时间"):
+        with self.assertRaisesRegex(ValueError, "入库时间不能晚于出库时间"):
             ParcelRepository.update_parcel(
                 parcel["parcel_id"],
                 status=2,
@@ -130,6 +130,49 @@ class ParcelDailyCounterTests(unittest.TestCase):
         unchanged = ParcelRepository.get_parcel_by_id(parcel["parcel_id"])
         self.assertEqual(unchanged["status"], 1)
         self.assertIsNone(unchanged["out_time"])
+
+    def test_backend_out_time_edit_moves_parcel_to_selected_business_date(self):
+        parcel = ParcelRepository.add_parcel(
+            "edited-out-time", cabinet_number="B01",
+            receiver_phone="13800000005", target_location="B", status=2
+        )
+
+        self.assertTrue(ParcelRepository.update_parcel(
+            parcel["parcel_id"],
+            in_time="2026-07-21 09:00:00",
+            out_time="2026-07-22 10:30:00",
+        ))
+
+        selected = ParcelDailyCounterRepository.refresh_snapshot(date(2026, 7, 22))
+        following = ParcelDailyCounterRepository.refresh_snapshot(date(2026, 7, 23))
+        updated = ParcelRepository.get_parcel_by_id(parcel["parcel_id"])
+        self.assertEqual(updated["out_time"], "2026-07-22 10:30:00")
+        self.assertEqual((selected["target_a_count"], selected["target_b_count"]), (0, 1))
+        self.assertEqual((following["target_a_count"], following["target_b_count"]), (0, 0))
+
+    def test_out_time_before_in_time_is_rejected(self):
+        parcel = ParcelRepository.add_parcel(
+            "invalid-out-time", cabinet_number="B02",
+            receiver_phone="13800000006", target_location="A", status=2
+        )
+
+        with self.assertRaisesRegex(ValueError, "入库时间不能晚于出库时间"):
+            ParcelRepository.update_parcel(
+                parcel["parcel_id"],
+                in_time="2026-07-22 11:00:00",
+                out_time="2026-07-22 10:00:00",
+            )
+
+    def test_non_picked_up_parcel_cannot_have_out_time(self):
+        parcel = ParcelRepository.add_parcel(
+            "invalid-status-out-time", cabinet_number="B03",
+            receiver_phone="13800000007", target_location="B"
+        )
+
+        with self.assertRaisesRegex(ValueError, "只有已取件包裹可以设置出库时间"):
+            ParcelRepository.update_parcel(
+                parcel["parcel_id"], out_time="2026-07-22 10:00:00"
+            )
 
     def test_existing_schema_drops_legacy_parcels(self):
         with DatabaseManager.get_connection() as conn:

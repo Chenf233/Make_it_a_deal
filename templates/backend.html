@@ -87,11 +87,12 @@
                                     <th>取件码</th>
                                     <th>状态</th>
                                     <th>入库时间</th>
+                                    <th>出库时间</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
                             <tbody id="parcels-tbody">
-                                <tr class="table-placeholder"><td colspan="9">加载中...</td></tr>
+                                <tr class="table-placeholder"><td colspan="10">加载中...</td></tr>
                             </tbody>
                         </table>
                         <div class="pagination" id="parcels-pagination">
@@ -234,6 +235,10 @@
                 <div class="form-group hidden" id="parcel-in-time-group">
                     <label for="parcel-in-time">入库时间 *</label>
                     <input type="datetime-local" id="parcel-in-time" step="1">
+                </div>
+                <div class="form-group hidden" id="parcel-out-time-group">
+                    <label for="parcel-out-time">出库时间</label>
+                    <input type="datetime-local" id="parcel-out-time" step="1">
                 </div>
                 <div class="form-actions">
                     <button type="button" id="btn-random-fill" class="btn btn-secondary">随机填充</button>

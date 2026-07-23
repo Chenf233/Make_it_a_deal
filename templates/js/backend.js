@@ -7,6 +7,7 @@
     };
 
     let currentView = 'users';
+    let editingParcelOriginalStatus = null;
 
     // ============ 工具函数 ============
     function $(selector, parent = document) {
@@ -36,6 +37,13 @@
         if (!value) return '';
         const withSeconds = value.length === 16 ? `${value}:00` : value;
         return withSeconds.replace('T', ' ');
+    }
+
+    function updateOutTimeVisibility() {
+        const isEditing = Boolean($('#parcel-id').value);
+        const isPickedUp = $('#parcel-status').value === '2';
+        $('#parcel-out-time-group').classList.toggle('hidden', !isEditing || !isPickedUp);
+        $('#parcel-out-time').required = isEditing && isPickedUp && editingParcelOriginalStatus === 2;
     }
 
     // ============ 模态框通用 ============
@@ -243,11 +251,14 @@
     $('#btn-add-parcel').addEventListener('click', () => {
         document.getElementById('form-parcel').reset();
         $('#parcel-id').value = '';
+        editingParcelOriginalStatus = null;
         $('#parcel-status').value = '1';
         $('#parcel-target-location').value = Math.random() < 0.5 ? 'A' : 'B';
         $('#parcel-in-time').value = '';
         $('#parcel-in-time').required = false;
         $('#parcel-in-time-group').classList.add('hidden');
+        $('#parcel-out-time').value = '';
+        $('#parcel-out-time-group').classList.add('hidden');
         $('#modal-parcel-title').textContent = '手动入库';
         openModal('modal-parcel');
     });
@@ -304,14 +315,14 @@
             if (!resp.ok) throw new Error(json.message || '加载包裹失败');
             renderParcels(json.data);
         } catch (e) {
-            tbody.innerHTML = `<tr class="table-placeholder"><td colspan="9">${e.message}</td></tr>`;
+            tbody.innerHTML = `<tr class="table-placeholder"><td colspan="10">${e.message}</td></tr>`;
         }
     }
 
     function renderParcels(parcels) {
         const tbody = $('#parcels-tbody');
         if (!parcels || parcels.length === 0) {
-            tbody.innerHTML = '<tr class="table-placeholder"><td colspan="9">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr class="table-placeholder"><td colspan="10">暂无数据</td></tr>';
             updatePaginationState('parcels', 0);
             return;
         }
@@ -326,6 +337,7 @@
                 <td>${p.cabinet_number || '-'}</td>
                 <td>${statusMap[p.status] || '-'}</td>
                 <td>${p.in_time || '-'}</td>
+                <td>${p.out_time || '-'}</td>
                 <td>
                     <button class="btn btn-sm btn-primary btn-edit-parcel" data-id="${p.id}">编辑</button>
                     <button class="btn btn-sm btn-danger btn-delete-parcel" data-id="${p.id}">删除</button>
@@ -344,6 +356,7 @@
             if (!resp.ok) throw new Error(json.message || '获取包裹信息失败');
             const p = json.data;
             $('#parcel-id').value = p.id;
+            editingParcelOriginalStatus = p.status;
             $('#parcel-tracking').value = p.tracking_no || '';
             $('#parcel-phone').value = p.receiver_phone || '';
             $('#parcel-company').value = p.company || '';
@@ -354,6 +367,8 @@
             $('#parcel-in-time').value = toDateTimeLocal(p.in_time);
             $('#parcel-in-time').required = true;
             $('#parcel-in-time-group').classList.remove('hidden');
+            $('#parcel-out-time').value = toDateTimeLocal(p.out_time);
+            updateOutTimeVisibility();
             $('#modal-parcel-title').textContent = '编辑包裹';
             openModal('modal-parcel');
         } catch (e) {
@@ -392,10 +407,15 @@
         const target_location = $('#parcel-target-location').value;
         const status = parseInt($('#parcel-status').value);
         const in_time = toStorageDateTime($('#parcel-in-time').value);
+        const out_time = toStorageDateTime($('#parcel-out-time').value);
 
         if (!tracking_no) { showToast('快递单号为必填', 'error'); return; }
         if (!receiver_phone || !/^1[3-9]\d{9}$/.test(receiver_phone)) { showToast('手机号格式不正确', 'error'); return; }
         if (id && !in_time) { showToast('入库时间不能为空', 'error'); return; }
+        if (id && status === 2 && editingParcelOriginalStatus === 2 && !out_time) {
+            showToast('已取件包裹的出库时间不能为空', 'error');
+            return;
+        }
 
         if (!id) {
             try {
@@ -411,7 +431,11 @@
             }
         } else {
             try {
-                const body = JSON.stringify({ tracking_no, receiver_phone, company, receiver_name, cabinet_number, target_location, status, in_time });
+                const body = JSON.stringify({
+                    tracking_no, receiver_phone, company, receiver_name,
+                    cabinet_number, target_location, status, in_time,
+                    out_time: status === 2 ? (out_time || null) : null
+                });
                 const resp = await fetch(`/api/backend/parcels/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
                 const json = await resp.json();
                 if (!resp.ok || json.code !== 200) throw new Error(json.message || '更新失败');
@@ -423,6 +447,8 @@
             }
         }
     });
+
+    $('#parcel-status').addEventListener('change', updateOutTimeVisibility);
 
     $$('.filter-btn', $('#view-parcels')).forEach(btn => {
         btn.addEventListener('click', () => {

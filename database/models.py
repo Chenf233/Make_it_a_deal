@@ -321,7 +321,7 @@ class ParcelRepository:
                       receiver_phone: str | None = None,
                       cabinet_number: str | None = None, status: int | None = None,
                       extra_info: dict | None = None, target_location: str | None = None,
-                      in_time: str | None = None) -> bool:
+                      in_time: str | None = None, out_time: str | None = None) -> bool:
         set_parts = []
         params = []
         if tracking_no is not None:
@@ -344,7 +344,7 @@ class ParcelRepository:
             params.append(json.dumps(extra_info))
         with DatabaseManager.get_connection() as conn:
             cursor = conn.cursor()
-            if status is not None or in_time is not None:
+            if status is not None or in_time is not None or out_time is not None:
                 current = cursor.execute(
                     "SELECT status, in_time, out_time FROM parcels WHERE parcel_id = ?", (parcel_id,)
                 ).fetchone()
@@ -353,7 +353,7 @@ class ParcelRepository:
 
                 next_status = status if status is not None else current["status"]
                 next_in_time = in_time if in_time is not None else current["in_time"]
-                next_out_time = current["out_time"]
+                next_out_time = out_time if out_time is not None else current["out_time"]
 
                 if in_time is not None:
                     try:
@@ -363,7 +363,17 @@ class ParcelRepository:
                     if parsed_in_time.strftime("%Y-%m-%d %H:%M:%S") != in_time:
                         raise ValueError("入库时间格式必须为 YYYY-MM-DD HH:MM:SS")
 
-                if status == 2 and current["status"] != 2:
+                if out_time is not None:
+                    try:
+                        parsed_out_time = datetime.strptime(out_time, "%Y-%m-%d %H:%M:%S")
+                    except ValueError as exc:
+                        raise ValueError("出库时间格式必须为 YYYY-MM-DD HH:MM:SS") from exc
+                    if parsed_out_time.strftime("%Y-%m-%d %H:%M:%S") != out_time:
+                        raise ValueError("出库时间格式必须为 YYYY-MM-DD HH:MM:SS")
+
+                if next_status != 2 and out_time is not None:
+                    raise ValueError("只有已取件包裹可以设置出库时间")
+                if status == 2 and current["status"] != 2 and out_time is None:
                     next_out_time = datetime.now(ZoneInfo("Asia/Shanghai")).strftime(
                         "%Y-%m-%d %H:%M:%S"
                     )
@@ -374,7 +384,7 @@ class ParcelRepository:
                     parsed_in_time = datetime.strptime(next_in_time, "%Y-%m-%d %H:%M:%S")
                     parsed_out_time = datetime.strptime(next_out_time, "%Y-%m-%d %H:%M:%S")
                     if parsed_in_time > parsed_out_time:
-                        raise ValueError("入库时间不能晚于取件时间")
+                        raise ValueError("入库时间不能晚于出库时间")
 
                 if in_time is not None:
                     set_parts.append("in_time = ?")
@@ -383,11 +393,13 @@ class ParcelRepository:
                 if status is not None:
                     set_parts.append("status = ?")
                     params.append(status)
-                    if status == 2 and current["status"] != 2:
-                        set_parts.append("out_time = ?")
-                        params.append(next_out_time)
-                    elif status != 2 and current["out_time"] is not None:
-                        set_parts.append("out_time = NULL")
+                if next_status == 2 and (
+                    out_time is not None or (status == 2 and current["status"] != 2)
+                ):
+                    set_parts.append("out_time = ?")
+                    params.append(next_out_time)
+                elif status is not None and status != 2 and current["out_time"] is not None:
+                    set_parts.append("out_time = NULL")
             if not set_parts:
                 return False
             sql = f"UPDATE parcels SET {', '.join(set_parts)} WHERE parcel_id = ?"

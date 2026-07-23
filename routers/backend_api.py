@@ -239,18 +239,19 @@ class ParcelUpdateRequest(BaseModel):
     target_location: Optional[Literal["A", "B"]] = None
     status: Optional[int] = Field(None, ge=1, le=3)
     in_time: Optional[str] = None
+    out_time: Optional[str] = None
 
-    @field_validator("in_time")
+    @field_validator("in_time", "out_time")
     @classmethod
-    def validate_in_time(cls, value: Optional[str]) -> Optional[str]:
+    def validate_parcel_time(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return None
         try:
             parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
         except ValueError as exc:
-            raise ValueError("入库时间格式必须为 YYYY-MM-DD HH:MM:SS") from exc
+            raise ValueError("时间格式必须为 YYYY-MM-DD HH:MM:SS") from exc
         if parsed.strftime("%Y-%m-%d %H:%M:%S") != value:
-            raise ValueError("入库时间格式必须为 YYYY-MM-DD HH:MM:SS")
+            raise ValueError("时间格式必须为 YYYY-MM-DD HH:MM:SS")
         return value
 
 
@@ -324,6 +325,7 @@ async def update_parcel(parcel_id: int, payload: ParcelUpdateRequest):
             target_location=payload.target_location,
             status=payload.status,
             in_time=payload.in_time,
+            out_time=payload.out_time,
             extra_info=extra_info if (payload.company is not None or payload.receiver_name is not None) else None
         )
     except ValueError as e:
