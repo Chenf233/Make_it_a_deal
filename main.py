@@ -143,6 +143,11 @@ async def wheels_page(request: Request):
     return templates.TemplateResponse(request=request, name="wheels.html")
 
 
+@app.get("/flow-map", response_class=HTMLResponse, summary="物流辐射网络页面")
+async def flow_map_page(request: Request):
+    return templates.TemplateResponse(request=request, name="flow_map.html")
+
+
 # ==========================
 # 全局 WebSocket 通信枢纽
 # ==========================
