@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#050817">
+    <title>物流辐射网络 | SmartStation</title>
+    <link rel="stylesheet" href="/static/css/flow_map.css">
+</head>
+<body>
+    <div id="scene" aria-hidden="true"></div>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <main class="interface">
+        <header class="topbar">
+            <div class="brand">
+                <span class="brand-mark"><i></i><i></i><i></i></span>
+                <div>
+                    <p>SMARTSTATION NETWORK</p>
+                    <h1>城市物流辐射网络</h1>
+                </div>
+            </div>
+            <div class="top-metrics">
+                <article>
+                    <span>今日包裹流量</span>
+                    <strong id="total-volume">0</strong>
+                    <em>PARCELS</em>
+                </article>
+                <article>
+                    <span>在线辐射节点</span>
+                    <strong id="online-nodes">11</strong>
+                    <em>NODES</em>
+                </article>
+                <article>
+                    <span>当前活跃线路</span>
+                    <strong id="active-routes">0</strong>
+                    <em>ROUTES</em>
+                </article>
+                <article class="efficiency">
+                    <span>网络增效指数</span>
+                    <strong id="efficiency">+0.0%</strong>
+                    <em>EFFICIENCY</em>
+                </article>
+            </div>
+            <div class="system-clock">
+                <time id="clock">00:00:00</time>
+                <span id="date">0000.00.00</span>
+            </div>
+        </header>
+
+        <section id="labels" class="labels" aria-label="物流节点"></section>
+
+        <aside class="panel event-panel">
+            <div class="panel-title">
+                <span>实时调度动态</span>
+                <small>LIVE ROUTING</small>
+            </div>
+            <ol id="event-list" class="event-list"></ol>
+        </aside>
+
+        <aside class="panel status-panel">
+            <div class="panel-title">
+                <span>网络运行状态</span>
+                <small>SYSTEM STATUS</small>
+            </div>
+            <div class="network-score">
+                <div class="score-ring"><strong id="network-score">96</strong><span>%</span></div>
+                <div><strong>全域协同稳定</strong><span>覆盖半径持续扩展</span></div>
+            </div>
+            <div class="status-grid">
+                <span>核心负载<strong id="core-load">72%</strong></span>
+                <span>平均时效<strong id="avg-time">12.8m</strong></span>
+                <span>中继吞吐<strong id="relay-flow">418</strong></span>
+                <span>覆盖区域<strong>8</strong></span>
+            </div>
+        </aside>
+
+        <footer class="footer-strip">
+            <span><i class="legend core"></i>中央核心</span>
+            <span><i class="legend relay"></i>中继节点</span>
+            <span><i class="legend destination"></i>辐射地点</span>
+            <div class="coordinates">E 121.4737 / N 31.2304 <b>NETWORK ONLINE</b></div>
+        </footer>
+    </main>
+
+    <div id="node-detail" class="node-detail" aria-hidden="true">
+        <small>NODE PROFILE</small>
+        <strong></strong>
+        <dl>
+            <dt>今日流量</dt><dd data-detail="volume">0</dd>
+            <dt>链路负载</dt><dd data-detail="load">0%</dd>
+            <dt>最近送达</dt><dd data-detail="last">--:--:--</dd>
+        </dl>
+    </div>
+
+    <script type="module" src="/static/js/flow_map.js"></script>
+</body>
+</html>
