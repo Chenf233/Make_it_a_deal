@@ -1,10 +1,19 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#050817">
     <title>物流辐射网络 | SmartStation</title>
+    <script>
+        (() => {
+            const requested = new URLSearchParams(location.search).get("theme");
+            const saved = localStorage.getItem("flow-map-theme");
+            document.documentElement.dataset.theme = requested === "light" || requested === "dark"
+                ? requested
+                : saved === "light" ? "light" : "dark";
+        })();
+    </script>
     <link rel="stylesheet" href="/static/css/flow_map.css">
 </head>
 <body>
@@ -42,9 +51,15 @@
                     <em>EFFICIENCY</em>
                 </article>
             </div>
-            <div class="system-clock">
-                <time id="clock">00:00:00</time>
-                <span id="date">0000.00.00</span>
+            <div class="system-tools">
+                <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换浅色主题" aria-pressed="false">
+                    <span class="theme-icon" aria-hidden="true"></span>
+                    <b>DARK</b>
+                </button>
+                <div class="system-clock">
+                    <time id="clock">00:00:00</time>
+                    <span id="date">0000.00.00</span>
+                </div>
             </div>
         </header>
 
