@@ -9,6 +9,53 @@ const COLORS = {
     ground: 0x071126,
 };
 
+const THEMES = {
+    dark: {
+        background: 0x030612,
+        fog: 0x030612,
+        terrainLow: 0x06122b,
+        terrainHigh: 0x12354d,
+        terrainScan: 0x29bddf,
+        terrainWake: 0x512b91,
+        contour: 0x4a3da6,
+        contourScan: 0x6befff,
+        roadEdge: 0x571b05,
+        roadCore: 0xeb4f0e,
+        roadScan: 0x522007,
+        cityBlock: 0x24415f,
+        core: 0x72f7ff,
+        relay: 0xa979ff,
+        destination: 0x67c9ef,
+        particles: [0x72f7ff, 0xa979ff],
+        exposure: 1.15,
+    },
+    light: {
+        background: 0xe8efee,
+        fog: 0xe8efee,
+        terrainLow: 0xc4d2d0,
+        terrainHigh: 0xe3ebe9,
+        terrainScan: 0x00a3b6,
+        terrainWake: 0x8b73bd,
+        contour: 0x708b92,
+        contourScan: 0x007f91,
+        roadEdge: 0x7a1f06,
+        roadCore: 0xd63d0c,
+        roadScan: 0x8f320b,
+        cityBlock: 0x9fb4b4,
+        core: 0x007f91,
+        relay: 0x7451ba,
+        destination: 0x267f91,
+        particles: [0x4c7d86, 0x826ca8],
+        exposure: 0.98,
+    },
+};
+
+const requestedTheme = new URLSearchParams(window.location.search).get("theme");
+let currentTheme = requestedTheme === "light" || requestedTheme === "dark"
+    ? requestedTheme
+    : localStorage.getItem("flow-map-theme") === "light" ? "light" : "dark";
+document.documentElement.dataset.theme = currentTheme;
+
 const MAP_CONFIG = {
     scan: {
         cycleDuration: 4,
@@ -75,12 +122,12 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = THEMES[currentTheme].exposure;
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x030612);
-scene.fog = new THREE.FogExp2(0x030612, 0.026);
+scene.background = new THREE.Color(THEMES[currentTheme].background);
+scene.fog = new THREE.FogExp2(THEMES[currentTheme].fog, 0.026);
 
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 120);
 const world = new THREE.Group();
@@ -100,6 +147,7 @@ const shockwaves = [];
 const clock = new THREE.Clock();
 const pointer = new THREE.Vector2();
 const terrainMaterials = [];
+const themedMaterials = [];
 let currentLayout = "standard";
 let nextDispatchAt = 0;
 let efficiencyValue = 36.8;
@@ -130,12 +178,82 @@ function registerTerrainMaterial(material) {
     return material;
 }
 
+function registerThemedMaterial(material, role) {
+    themedMaterials.push({ material, role });
+    return material;
+}
+
+function themeRoleColor(theme, role) {
+    if (role === "coreOrb") return theme === THEMES.light ? 0xf6ffff : COLORS.white;
+    return theme[role] ?? theme.destination;
+}
+
+function applyTheme(themeName, persist = true) {
+    currentTheme = themeName === "light" ? "light" : "dark";
+    const theme = THEMES[currentTheme];
+    document.documentElement.dataset.theme = currentTheme;
+    document.querySelector('meta[name="theme-color"]').content = currentTheme === "light" ? "#e8efee" : "#050817";
+    renderer.toneMappingExposure = theme.exposure;
+    scene.background.setHex(theme.background);
+    scene.fog.color.setHex(theme.fog);
+
+    terrainMaterials.forEach((terrainMaterial) => {
+        const uniforms = terrainMaterial.uniforms;
+        if (uniforms.uTerrainLow) uniforms.uTerrainLow.value.setHex(theme.terrainLow);
+        if (uniforms.uTerrainHigh) uniforms.uTerrainHigh.value.setHex(theme.terrainHigh);
+        if (uniforms.uScanColor) uniforms.uScanColor.value.setHex(theme.terrainScan);
+        if (uniforms.uWakeColor) uniforms.uWakeColor.value.setHex(theme.terrainWake);
+        if (uniforms.uContourColor) uniforms.uContourColor.value.setHex(theme.contour);
+        if (uniforms.uContourScan) uniforms.uContourScan.value.setHex(theme.contourScan);
+        if (uniforms.uRoadEdge) uniforms.uRoadEdge.value.setHex(theme.roadEdge);
+        if (uniforms.uRoadCore) uniforms.uRoadCore.value.setHex(theme.roadCore);
+        if (uniforms.uRoadScan) uniforms.uRoadScan.value.setHex(theme.roadScan);
+        if (uniforms.uColor) uniforms.uColor.value.setHex(theme.cityBlock);
+        if (uniforms.uContourColor) {
+            terrainMaterial.blending = currentTheme === "light" ? THREE.NormalBlending : THREE.AdditiveBlending;
+            terrainMaterial.needsUpdate = true;
+        }
+    });
+
+    themedMaterials.forEach(({ material: themedMaterial, role }) => {
+        themedMaterial.color.setHex(themeRoleColor(theme, role));
+        if (themedMaterial.isSpriteMaterial) {
+            themedMaterial.blending = currentTheme === "light" ? THREE.NormalBlending : THREE.AdditiveBlending;
+            themedMaterial.needsUpdate = true;
+        }
+    });
+
+    const stars = world.getObjectByName("stars");
+    if (stars) {
+        const colors = stars.geometry.attributes.color;
+        const primary = new THREE.Color(theme.particles[0]);
+        const secondary = new THREE.Color(theme.particles[1]);
+        for (let i = 0; i < colors.count; i += 1) {
+            const color = i % 7 < 5 ? primary : secondary;
+            colors.setXYZ(i, color.r, color.g, color.b);
+        }
+        colors.needsUpdate = true;
+        stars.material.opacity = currentTheme === "light" ? 0.18 : 0.52;
+    }
+
+    coreLight.color.setHex(theme.core);
+    const toggle = document.querySelector("#theme-toggle");
+    toggle.querySelector("b").textContent = currentTheme.toUpperCase();
+    toggle.setAttribute("aria-pressed", String(currentTheme === "light"));
+    toggle.setAttribute("aria-label", currentTheme === "light" ? "切换深色主题" : "切换浅色主题");
+    if (persist) localStorage.setItem("flow-map-theme", currentTheme);
+}
+
 function createTerrainMaterial() {
     return registerTerrainMaterial(new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 },
             uScanRadius: { value: 0 },
             uMaxRadius: { value: MAP_CONFIG.scan.maxRadius },
+            uTerrainLow: { value: new THREE.Color(THEMES[currentTheme].terrainLow) },
+            uTerrainHigh: { value: new THREE.Color(THEMES[currentTheme].terrainHigh) },
+            uScanColor: { value: new THREE.Color(THEMES[currentTheme].terrainScan) },
+            uWakeColor: { value: new THREE.Color(THEMES[currentTheme].terrainWake) },
         },
         vertexShader: `
             uniform float uScanRadius;
@@ -156,6 +274,10 @@ function createTerrainMaterial() {
             uniform float uTime;
             uniform float uScanRadius;
             uniform float uMaxRadius;
+            uniform vec3 uTerrainLow;
+            uniform vec3 uTerrainHigh;
+            uniform vec3 uScanColor;
+            uniform vec3 uWakeColor;
             varying vec3 vWorldPosition;
             varying vec3 vNormal;
             void main() {
@@ -166,10 +288,9 @@ function createTerrainMaterial() {
                 vec3 lightDirection = normalize(vec3(-0.35, 0.82, 0.45));
                 float light = 0.34 + max(dot(normalize(vNormal), lightDirection), 0.0) * 0.42;
                 float heightGlow = smoothstep(-0.45, 0.7, vWorldPosition.y) * 0.08;
-                vec3 base = vec3(0.018, 0.045, 0.105) * light;
-                base += vec3(0.018, 0.055, 0.11) * heightGlow;
-                base += vec3(0.16, 0.74, 0.95) * wave * 0.22;
-                base += vec3(0.28, 0.12, 0.58) * wake * 0.1;
+                vec3 base = mix(uTerrainLow, uTerrainHigh, clamp(light + heightGlow, 0.0, 1.0));
+                base = mix(base, uScanColor, wave * 0.28);
+                base = mix(base, uWakeColor, wake * 0.1);
                 gl_FragColor = vec4(base * edgeFade, 1.0);
             }
         `,
@@ -181,6 +302,8 @@ function createContourMaterial() {
         uniforms: {
             uScanRadius: { value: 0 },
             uMaxRadius: { value: MAP_CONFIG.scan.maxRadius },
+            uContourColor: { value: new THREE.Color(THEMES[currentTheme].contour) },
+            uContourScan: { value: new THREE.Color(THEMES[currentTheme].contourScan) },
         },
         transparent: true,
         depthWrite: false,
@@ -196,6 +319,8 @@ function createContourMaterial() {
         fragmentShader: `
             uniform float uScanRadius;
             uniform float uMaxRadius;
+            uniform vec3 uContourColor;
+            uniform vec3 uContourScan;
             varying vec3 vWorldPosition;
             void main() {
                 float radius = length(vWorldPosition.xz);
@@ -203,7 +328,7 @@ function createContourMaterial() {
                 float wake = 1.0 - smoothstep(0.0, 2.7, abs(radius - max(0.0, uScanRadius - 1.5)));
                 float edgeFade = 1.0 - smoothstep(uMaxRadius - 4.0, uMaxRadius, radius);
                 float alpha = (0.075 + wave * 0.78 + wake * 0.16) * edgeFade;
-                vec3 color = mix(vec3(0.29, 0.24, 0.65), vec3(0.42, 0.94, 1.0), wave);
+                vec3 color = mix(uContourColor, uContourScan, wave);
                 gl_FragColor = vec4(color, alpha);
             }
         `,
@@ -306,6 +431,9 @@ function createRoadMaterial() {
     return registerTerrainMaterial(new THREE.ShaderMaterial({
         uniforms: {
             uScanRadius: { value: 0 },
+            uRoadEdge: { value: new THREE.Color(THEMES[currentTheme].roadEdge) },
+            uRoadCore: { value: new THREE.Color(THEMES[currentTheme].roadCore) },
+            uRoadScan: { value: new THREE.Color(THEMES[currentTheme].roadScan) },
         },
         transparent: false,
         depthWrite: true,
@@ -325,16 +453,17 @@ function createRoadMaterial() {
         `,
         fragmentShader: `
             uniform float uScanRadius;
+            uniform vec3 uRoadEdge;
+            uniform vec3 uRoadCore;
+            uniform vec3 uRoadScan;
             varying vec3 vWorldPosition;
             varying vec2 vUv;
             void main() {
                 float radius = length(vWorldPosition.xz);
                 float scan = 1.0 - smoothstep(0.0, 1.0, abs(radius - uScanRadius));
                 float edge = smoothstep(0.0, 0.18, vUv.x) * smoothstep(0.0, 0.18, 1.0 - vUv.x);
-                vec3 edgeColor = vec3(0.34, 0.105, 0.018);
-                vec3 coreColor = vec3(0.92, 0.31, 0.055);
-                vec3 color = mix(edgeColor, coreColor, edge);
-                color += vec3(0.32, 0.12, 0.025) * scan;
+                vec3 color = mix(uRoadEdge, uRoadCore, edge);
+                color += uRoadScan * scan;
                 gl_FragColor = vec4(color, 1.0);
             }
         `,
@@ -423,8 +552,8 @@ function createStars() {
     const count = 850;
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
-    const cyan = new THREE.Color(COLORS.cyan);
-    const violet = new THREE.Color(COLORS.violet);
+    const cyan = new THREE.Color(THEMES[currentTheme].particles[0]);
+    const violet = new THREE.Color(THEMES[currentTheme].particles[1]);
     for (let i = 0; i < count; i += 1) {
         const radius = 12 + Math.random() * 42;
         const angle = Math.random() * Math.PI * 2;
@@ -439,28 +568,34 @@ function createStars() {
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     const particles = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.055, transparent: true, opacity: 0.52, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     particles.name = "stars";
+    particles.userData.colorChoices = colors;
     world.add(particles);
 }
 
 function createNode(config) {
     const group = new THREE.Group();
-    const color = config.type === "core" ? COLORS.cyan : config.type === "relay" ? COLORS.violet : 0x67c9ef;
+    const theme = THEMES[currentTheme];
+    const color = config.type === "core" ? theme.core : config.type === "relay" ? theme.relay : theme.destination;
     const baseRadius = config.type === "core" ? 1.08 : config.type === "relay" ? 0.55 : 0.34;
 
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(baseRadius, baseRadius * 1.14, 0.12, config.type === "relay" ? 6 : 32), material(color, 0.3));
+    const discMaterial = registerThemedMaterial(material(color, 0.3), config.type);
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(baseRadius, baseRadius * 1.14, 0.12, config.type === "relay" ? 6 : 32), discMaterial);
     disc.position.y = 0.08;
     group.add(disc);
 
     const beaconHeight = config.type === "core" ? 2.9 : config.type === "relay" ? 1.45 : 0.72;
-    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(baseRadius * 0.09, baseRadius * 0.34, beaconHeight, config.type === "relay" ? 6 : 16, 1, true), material(color, 0.35));
+    const beaconMaterial = registerThemedMaterial(material(color, 0.35), config.type);
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(baseRadius * 0.09, baseRadius * 0.34, beaconHeight, config.type === "relay" ? 6 : 16, 1, true), beaconMaterial);
     beacon.position.y = beaconHeight / 2 + 0.12;
     group.add(beacon);
 
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(baseRadius * (config.type === "core" ? 0.27 : 0.2), 16, 12), material(config.type === "core" ? COLORS.white : color));
+    const orbMaterial = registerThemedMaterial(material(config.type === "core" ? COLORS.white : color), config.type === "core" ? "coreOrb" : config.type);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(baseRadius * (config.type === "core" ? 0.27 : 0.2), 16, 12), orbMaterial);
     orb.position.y = beaconHeight + 0.16;
     group.add(orb);
 
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeGlowTexture(), color, transparent: true, opacity: config.type === "core" ? 0.9 : 0.65, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const glowMaterial = registerThemedMaterial(new THREE.SpriteMaterial({ map: makeGlowTexture(), color, transparent: true, opacity: config.type === "core" ? 0.9 : 0.65, blending: THREE.AdditiveBlending, depthWrite: false }), config.type);
+    const glow = new THREE.Sprite(glowMaterial);
     glow.scale.setScalar(baseRadius * (config.type === "core" ? 5.2 : 3.8));
     glow.position.y = beaconHeight + 0.1;
     group.add(glow);
@@ -468,7 +603,9 @@ function createNode(config) {
     const ringCount = config.type === "core" ? 3 : config.type === "relay" ? 2 : 1;
     const rotating = [];
     for (let i = 0; i < ringCount; i += 1) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(baseRadius * (1.15 + i * 0.34), 0.018 + i * 0.006, 6, 64), material(i === 1 ? COLORS.violet : color, 0.62 - i * 0.1));
+        const ringRole = i === 1 ? "relay" : config.type;
+        const ringMaterial = registerThemedMaterial(material(i === 1 ? theme.relay : color, 0.62 - i * 0.1), ringRole);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(baseRadius * (1.15 + i * 0.34), 0.018 + i * 0.006, 6, 64), ringMaterial);
         ring.rotation.x = Math.PI / 2;
         ring.position.y = 0.12 + i * 0.12;
         rotating.push(ring);
@@ -557,7 +694,9 @@ function rebuildRoutes() {
     routeConfig.forEach((ids, index) => {
         const curve = makeCurve(ids, 1.7 + (index % 3) * 0.38);
         const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(90));
-        const line = new THREE.Line(geometry, lineMaterial(index % 3 === 0 ? COLORS.violet : COLORS.cyan, 0.16));
+        const routeRole = index % 3 === 0 ? "relay" : "core";
+        const routeColor = routeRole === "relay" ? THEMES[currentTheme].relay : THEMES[currentTheme].core;
+        const line = new THREE.Line(geometry, registerThemedMaterial(lineMaterial(routeColor, 0.16), routeRole));
         world.add(line);
         routes.push({ ids, curve, line });
     });
@@ -566,13 +705,15 @@ function rebuildRoutes() {
 function createFlight(route) {
     const destination = nodes.get(route.ids.at(-1));
     const amount = 1 + Math.floor(Math.random() * 8);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), material(Math.random() > 0.32 ? COLORS.cyan : COLORS.violet));
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeGlowTexture(), color: Math.random() > 0.32 ? COLORS.cyan : COLORS.violet, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const flightRole = Math.random() > 0.32 ? "core" : "relay";
+    const flightColor = THEMES[currentTheme][flightRole];
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), registerThemedMaterial(material(flightColor), flightRole));
+    const glow = new THREE.Sprite(registerThemedMaterial(new THREE.SpriteMaterial({ map: makeGlowTexture(), color: flightColor, transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending, depthWrite: false }), flightRole));
     glow.scale.setScalar(1.15);
     head.add(glow);
     const trailPoints = Array.from({ length: 13 }, () => new THREE.Vector3());
     const trailGeometry = new THREE.BufferGeometry().setFromPoints(trailPoints);
-    const trail = new THREE.Line(trailGeometry, lineMaterial(COLORS.cyan, 0.55));
+    const trail = new THREE.Line(trailGeometry, registerThemedMaterial(lineMaterial(THEMES[currentTheme].core, 0.55), "core"));
     world.add(head, trail);
     flights.push({ route, destination, amount, head, trail, progress: 0, speed: 0.16 + Math.random() * 0.08, trailPoints });
     route.line.material.opacity = 0.52;
@@ -791,11 +932,15 @@ window.addEventListener("pointermove", (event) => {
 document.addEventListener("visibilitychange", () => {
     if (!document.hidden) clock.getDelta();
 });
+document.querySelector("#theme-toggle").addEventListener("click", () => {
+    applyTheme(currentTheme === "dark" ? "light" : "dark");
+});
 
 createGround();
 createStars();
 nodeConfig.forEach(createNode);
 applyLayout(true);
+applyTheme(currentTheme, false);
 updateClock();
 updateHud();
 addEvent("SmartStation 城市物流辐射网络已完成拓扑同步");
